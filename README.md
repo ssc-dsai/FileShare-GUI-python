@@ -297,7 +297,7 @@ Paths are set only in project_config.py. Change paths there, save, then restart 
 ![Dashboard status](docs/images/1_Dashboard.png)
 
 ### Configuration of Absolute Paths
-![Configuration](docs/images/2_ Configuration.png)
+![Configuration](docs/images/2_Configuration.png)
 
 ### Deduplication
 ![Deduplication](docs/images/3_DeDuplication.png)
