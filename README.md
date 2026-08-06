@@ -1,5 +1,3 @@
-Here’s a full **README.md** you can drop in the project root and commit to GitHub.
-
 ```markdown
 # FileShare-GUI
 
