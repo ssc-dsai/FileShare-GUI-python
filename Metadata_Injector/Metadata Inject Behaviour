@@ -1,0 +1,6 @@
+What happens
+Read each *.metadata.json from PLACEHOLDERS_DIR
+Locate the original file (original_path in JSON, else search)
+Clone it under INJECTED_METADATA_DIR (keeps subfolders when possible)
+Word/Excel: inject Title, Subject, Keywords + key custom properties (if pywin32 is available)
+Always write a full .metadata.json next to the clone

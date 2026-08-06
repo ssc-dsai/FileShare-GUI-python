@@ -1,0 +1,30 @@
+# Environments
+.venv/
+venv/
+env/
+*.conda/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Local data & models (keep on disk, not in Git)
+data/
+*.npy
+embedding_cache/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs / local outputs (optional)
+*.log

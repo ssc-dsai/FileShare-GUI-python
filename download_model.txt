@@ -1,0 +1,9 @@
+conda activate FileShare-GUI
+
+**********************EMBEDDING MODEL******************************************
+
+python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; local_dir = Path(r'C:\JAY_DOCS\models\paraphrase-multilingual-MiniLM-L12-v2'); local_dir.mkdir(parents=True, exist_ok=True); print('Downloading to', local_dir); model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); model.save(str(local_dir)); print('Done')"
+
+**********************VISION MODEL******************************************
+
+python -c "from pathlib import Path; from huggingface_hub import snapshot_download; local_dir = Path(r'C:\JAY_DOCS\models\Qwen2-VL-2B-Instruct'); local_dir.mkdir(parents=True, exist_ok=True); print('Downloading to', local_dir); snapshot_download(repo_id='Qwen/Qwen2-VL-2B-Instruct', local_dir=str(local_dir), local_dir_use_symlinks=False); print('Done')"

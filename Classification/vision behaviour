@@ -1,0 +1,4 @@
+File type,      What happens
+Normal text/PDF/DOCX,"MiniLM only (unchanged, fast)"
+Vision-flagged image,Qwen2-VL describes image → MiniLM classifies on that description + marker text
+Result Excel,New column Vision_Description shows what the model “saw”

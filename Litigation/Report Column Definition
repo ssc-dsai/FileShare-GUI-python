@@ -1,0 +1,8 @@
+Column,Meaning
+
+rank = By hybrid score
+hybrid_score = Normalized mix (default 60% vector / 40% BM25)
+vector_score = MiniLM cosine similarity
+bm25_score = Raw BM25 from tombstone query
+matched_tombstone_terms = Which query tokens appeared in the doc
+tombstone_query = Actual BM25 query string used

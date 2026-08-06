@@ -1,0 +1,26 @@
+What it is:
+In 8_litigation_search.py we:
+
+Embed the package text (chunked) with MiniLM → vectors
+Compare those vectors to every indexed chunk from LITIGATION_SEARCH_DIR
+Use cosine similarity (from sklearn.metrics.pairwise.cosine_similarity)
+Keep the best chunk score per file, then rank files
+
+So:
+Name in reportMeaning
+score: Cosine similarity between package query vectors and document chunk vectors (MiniLM embeddings)
+Range is roughly 0.0 → 1.0 (with normalized embeddings). Higher = more semantically similar.
+
+
+What it is not:
+Not keyword/BM25 rank
+Not a probability or “% match” from a classifier
+Not distance (Euclidean); it is similarity (higher is better)
+
+How to read it:
+Score (approx.)
+Interpretation
+≥ 0.45–0.50 Strong topical overlap
+0.30–0.45 Moderate relevance
+0.22–0.30 Weak but above your default min_score cutoff
+< 0.22 Filtered out by default
