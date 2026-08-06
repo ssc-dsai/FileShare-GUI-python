@@ -290,6 +290,7 @@ litigation folders). Save the file and restart the app after any change.
 
 Paths are set only in project_config.py. Change paths there, save, then restart the application.
 
+```
 
 ## User interface
 
@@ -313,3 +314,5 @@ Paths are set only in project_config.py. Change paths there, save, then restart 
 
 ### Search Engine for Litigation Documents
 ![Litigation](docs/images/7_Litigation.png)
+
+```
