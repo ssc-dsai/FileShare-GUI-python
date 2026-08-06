@@ -290,3 +290,26 @@ litigation folders). Save the file and restart the app after any change.
 
 Paths are set only in project_config.py. Change paths there, save, then restart the application.
 
+
+## User interface
+
+### Dashboard
+![Dashboard status](docs/images/1_Dashboard.png)
+
+### Configuration of Absolute Paths
+![Configuration](docs/images/2_ Configuration.png)
+
+### Deduplication
+![Deduplication](docs/images/3_DeDuplication.png)
+
+### Ingestion of Raw Text from Documents
+![Ingestion](docs/images/4_Ingestion.png)
+
+### Classification
+![Classification](docs/images/5_Classification.png)
+
+### Metadata Placeholder and Injection
+![Metadata](docs/images/6_Metadata.png)
+
+### Search Engine for Litigation Documents
+![Litigation](docs/images/7_Litigation.png)
