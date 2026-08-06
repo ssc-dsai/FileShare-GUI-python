@@ -297,19 +297,19 @@ Paths are set only in project_config.py. Change paths there, save, then restart 
 ![Dashboard status](docs/images/1_Dashboard.png)
 
 ### Configuration of Absolute Paths
-![Classification results](docs/images/2_ Configuration.png)
+![Configuration](docs/images/2_ Configuration.png)
 
 ### Deduplication
-![Classification results](docs/images/3_DeDuplication.png)
+![Deduplication](docs/images/3_DeDuplication.png)
 
 ### Ingestion of Raw Text from Documents
-![Classification results](docs/images/4_Ingestion.png)
+![Ingestion](docs/images/4_Ingestion.png)
 
 ### Classification
-![Classification results](docs/images/5_Classification.png)
+![Classification](docs/images/5_Classification.png)
 
 ### Metadata Placeholder and Injection
-![Classification results](docs/images/6_Metadata.png)
+![Metadata](docs/images/6_Metadata.png)
 
 ### Search Engine for Litigation Documents
-![Classification results](docs/images/7_Litigation.png)
+![Litigation](docs/images/7_Litigation.png)
