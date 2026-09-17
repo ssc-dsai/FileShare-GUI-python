@@ -19,6 +19,7 @@ import gradio as gr
 from backend.runners import (
     run_classification,
     run_dedup_analysis,
+    run_dedup_delete,
     run_ingestion,
     run_metadata_injector,
     run_placeholder_creator,
@@ -62,7 +63,21 @@ def refresh_dashboard() -> str:
 def ui_run_dedup() -> str:
     ok, log, _ = run_dedup_analysis()
     header = "✅ Deduplication analysis finished" if ok else "❌ Deduplication analysis failed"
-    return f"{header}\n\n```\n{log}\n```"
+    extra = f"\n\nFolder: `{DEDUPS_DIR}`"
+    return f"{header}{extra}\n\n```\n{log}\n```"
+
+
+def ui_run_dedup_delete(excel_name: str, dry_run: bool) -> str:
+    name = (excel_name or "").strip()
+    if not name:
+        return "❌ Enter the Excel filename (it must sit in DEDUPS_DIR)."
+    ok, log, _ = run_dedup_delete(name, dry_run=bool(dry_run))
+    if dry_run:
+        header = "✅ Dry-run finished (no files deleted)" if ok else "❌ Dry-run failed"
+    else:
+        header = "✅ Confirmed delete finished" if ok else "❌ Delete failed"
+    extra = f"\n\nFolder: `{DEDUPS_DIR}`"
+    return f"{header}{extra}\n\n```\n{log}\n```"
 
 
 def ui_run_ingestion() -> str:
@@ -156,15 +171,50 @@ def build_ui() -> gr.Blocks:
             gr.Markdown(
                 f"""
                 ### Phase 0 – Deduplication
-                **Prerequisite:** documents under `SOURCE_DOCS_DIR`  
-                `{SOURCE_DOCS_DIR}`
+                **Prerequisite:** documents under `{SOURCE_DOCS_DIR}`
 
-                Produces a review Excel under `DEDUPS_DIR`. Adjust `User_Confirmed_Delete`, then use delete (dry-run available).
+                **Step A** — Run analysis. Review Excel is written under `{DEDUPS_DIR}`.
+
+                **Step B** — In that Excel, set **User_Confirmed_Delete** to `Yes`
+                for files you want removed. Save the workbook.
+
+                **Step C** — Type the Excel filename below.
+                - Leave **Dry-run CHECKED** to preview (nothing is deleted).
+                - **Uncheck** Dry-run only when you are ready to delete confirmed rows.
                 """
             )
             btn_dedup = gr.Button("▶ Run Deduplication Analysis", variant="primary")
-            dedup_log = gr.Textbox(label="Log output", lines=20, max_lines=40, elem_classes=["log-box"])
+            dedup_log = gr.Textbox(
+                label="Analysis log",
+                lines=14,
+                max_lines=30,
+                elem_classes=["log-box"],
+            )
             btn_dedup.click(fn=ui_run_dedup, outputs=dedup_log)
+
+            gr.Markdown("---")
+            gr.Markdown("### Delete confirmed duplicates")
+            dedup_excel = gr.Textbox(
+                label="Reviewed Excel filename (in DEDUPS_DIR)",
+                value="deduplication_review_data.xlsx",
+                placeholder="deduplication_review_YYYYMMDD_HHMM.xlsx",
+            )
+            dedup_dry_run = gr.Checkbox(
+                label="Dry-run — CHECKED = preview only (no delete). UNCHECK = really delete rows marked Yes.",
+                value=True,
+            )
+            btn_dedup_del = gr.Button("▶ Run delete / dry-run", variant="secondary")
+            dedup_del_log = gr.Textbox(
+                label="Delete / dry-run log",
+                lines=12,
+                max_lines=25,
+                elem_classes=["log-box"],
+            )
+            btn_dedup_del.click(
+                fn=ui_run_dedup_delete,
+                inputs=[dedup_excel, dedup_dry_run],
+                outputs=dedup_del_log,
+            )
 
         with gr.Tab("1 · Ingestion"):
             gr.Markdown(
@@ -259,7 +309,7 @@ def build_ui() -> gr.Blocks:
                 ## Runbook
 
                 ### Classification pipeline
-                1. **0 · Deduplication** (optional) → review Excel → delete confirmed duplicates
+                1. **0 · Deduplication** (optional) → review Excel → dry-run → confirmed delete
                 2. **1 · Ingestion** → extracted texts
                 3. **2 · Classification** → pick MiniLM or Qwen3 → separate Excel reports
                 4. **3 · Placeholders** → enter the Excel filename you want to use
