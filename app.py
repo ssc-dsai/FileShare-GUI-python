@@ -244,16 +244,9 @@ def build_ui() -> gr.Blocks:
                 4. **3 · Placeholders** → JSON side-cars  
                 5. **4 · Injector** → clones + native metadata where possible  
 
-                ### Litigation (independent of classification)
-                1. Put court-case files in **LITIGATION_CASE_SOURCE_DIR**  
-                2. **Build package** (compact tombstone + summaries)  
-                3. **Build index** on **LITIGATION_SEARCH_DIR** (once / when corpus changes)  
-                4. **Search + report** using the package `.txt` as the query  
-
                 ### Notes
                 - Change paths only via `project_config.py` or `ENV_*` env vars, then **restart**.  
                 - Closing the browser does **not** stop a long job already running on the server.  
-                - BM25 uses tombstone facts; if all values are `Not Found`, only vector scores apply.  
                 """
             )
 
