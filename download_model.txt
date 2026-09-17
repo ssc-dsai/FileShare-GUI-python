@@ -4,6 +4,12 @@ conda activate FileShare-GUI
 
 python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; local_dir = Path(r'C:\JAY_DOCS\models\paraphrase-multilingual-MiniLM-L12-v2'); local_dir.mkdir(parents=True, exist_ok=True); print('Downloading to', local_dir); model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); model.save(str(local_dir)); print('Done')"
 
+Why Instruction-Aware is SuperiorInstruction-aware models like Qwen/Qwen3-Embedding-0.6B solve this by taking a explicit text prompt (instruction) alongside your document.
+Think of it like hiring an assistant to read a stack of papers.Traditional Model: You tell them, "Read this page and summarize its vibe."Instruction-Aware Model: You tell them, "Read this page and focus exclusively on what department it belongs to."When you pass the instruction, the model dynamically shifts its mathematical attention weights. It actively suppresses irrelevant details (like sentiment, slang, or grammar length) and amplifies the semantic features needed for your specific task.
+
+Qwen/Qwen3-Embedding-0.6B
+ hybridInstruction-Aware (Custom text hints)
+
 **********************VISION MODEL******************************************
 
 python -c "from pathlib import Path; from huggingface_hub import snapshot_download; local_dir = Path(r'C:\JAY_DOCS\models\Qwen2-VL-2B-Instruct'); local_dir.mkdir(parents=True, exist_ok=True); print('Downloading to', local_dir); snapshot_download(repo_id='Qwen/Qwen2-VL-2B-Instruct', local_dir=str(local_dir), local_dir_use_symlinks=False); print('Done')"

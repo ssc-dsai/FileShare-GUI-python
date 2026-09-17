@@ -43,17 +43,25 @@ INJECTED_METADATA_DIR = Path(os.getenv(
 PLACEHOLDERS_DIR = INJECTED_METADATA_DIR / "placeholders"
 
 # ──────────────────────────────────────────────────────────────────
-# LOCAL MODELS (fully offline)
+# LOCAL MODELS (fully offline) — load ONLY the selected embedder
 # ──────────────────────────────────────────────────────────────────
 MODELS_DIR = Path(os.getenv(
     "MODELS_DIR",
     r"C:\JAY_DOCS\models"
 )).resolve()
 
-EMBEDDING_MODEL_PATH = Path(os.getenv(
+EMBEDDING_MODEL_MINILM_PATH = Path(os.getenv(
     "EMBEDDING_MODEL",
     str(MODELS_DIR / "paraphrase-multilingual-MiniLM-L12-v2")
 )).resolve()
+
+EMBEDDING_MODEL_QWEN_PATH = Path(os.getenv(
+    "EMBEDDING_MODEL_QWEN",
+    str(MODELS_DIR / "Qwen3-Embedding-0.6B")
+)).resolve()
+
+# Alias used by older scripts (MiniLM)
+EMBEDDING_MODEL_PATH = EMBEDDING_MODEL_MINILM_PATH
 
 VISION_MODEL_PATH = Path(os.getenv(
     "VISION_MODEL",
@@ -61,6 +69,41 @@ VISION_MODEL_PATH = Path(os.getenv(
 )).resolve()
 
 CLASSIFICATION_MODEL_PATH = VISION_MODEL_PATH
+
+EMBEDDER_CHOICES = {
+    "minilm": {
+        "label": "MiniLM (fast baseline)",
+        "path": EMBEDDING_MODEL_MINILM_PATH,
+        "cache_subdir": "minilm",
+        "use_instruction": False,
+        "chunk_chars": 450,
+        "results_stem": "classification_results_minilm",
+    },
+    "qwen3": {
+        "label": "Qwen3-Embedding-0.6B (stronger, GPU)",
+        "path": EMBEDDING_MODEL_QWEN_PATH,
+        "cache_subdir": "qwen3_0.6b",
+        "use_instruction": True,
+        "chunk_chars": 1800,
+        "results_stem": "classification_results_qwen3",
+    },
+}
+
+QWEN_DOC_INSTRUCTION = (
+    "Identify which records function, sub-function, or business process "
+    "this text belongs to. Focus on operational purpose and subject matter, "
+    "not tone, formatting, or document length."
+)
+
+
+def resolve_embedder(key: str) -> dict:
+    key = (key or "minilm").strip().lower()
+    if key not in EMBEDDER_CHOICES:
+        key = "minilm"
+    cfg = dict(EMBEDDER_CHOICES[key])
+    cfg["key"] = key
+    cfg["cache_dir"] = CLASSIFICATION_RESULTS_DIR / "embedding_cache" / cfg["cache_subdir"]
+    return cfg
 
 # ──────────────────────────────────────────────────────────────────
 # RESOURCE FILES (travel with the project)
@@ -75,7 +118,7 @@ TRIVIAL_SUBJECTS = RESOURCES_DIR / "trivial_subjects.txt"
 
 
 def ensure_directories():
-    """Create all required folders automatically (except SOURCE_DOCS_DIR)."""
+    """Create working folders automatically (except SOURCE_DOCS_DIR)."""
     dirs = [
         EXTRACTED_TEXTS_DIR,
         CLASSIFICATION_RESULTS_DIR,
@@ -95,11 +138,15 @@ def ensure_directories():
     print(f"   • Injected metadata      : {INJECTED_METADATA_DIR}")
     print(f"   • Placeholders           : {PLACEHOLDERS_DIR}")
     print(f"   • Local models           : {MODELS_DIR}")
+    print(f"   • MiniLM embedder        : {EMBEDDING_MODEL_MINILM_PATH}")
+    print(f"   • Qwen3 embedder         : {EMBEDDING_MODEL_QWEN_PATH}")
+    print(f"   • Vision model           : {VISION_MODEL_PATH}")
 
 
 ensure_directories()
 
 print("🚀 Central config loaded (independent absolute paths)")
-print(f"   SOURCE_DOCS_DIR       = {SOURCE_DOCS_DIR}")
-print(f"   EMBEDDING_MODEL_PATH  = {EMBEDDING_MODEL_PATH}")
-print(f"   VISION_MODEL_PATH     = {VISION_MODEL_PATH}")
+print(f"   SOURCE_DOCS_DIR              = {SOURCE_DOCS_DIR}")
+print(f"   EMBEDDING_MODEL_MINILM_PATH  = {EMBEDDING_MODEL_MINILM_PATH}")
+print(f"   EMBEDDING_MODEL_QWEN_PATH    = {EMBEDDING_MODEL_QWEN_PATH}")
+print(f"   VISION_MODEL_PATH            = {VISION_MODEL_PATH}")

@@ -121,6 +121,9 @@ def classify_document(
             indexes=indexes,
             embedder=embedder,
             min_confidence=float(FUNCTION_MIN_SCORE),
+            use_instruction=kwargs.get("use_instruction", False),
+            instruction=kwargs.get("instruction", ""),
+            chunk_chars=int(kwargs.get("chunk_chars") or 450),
         )
         if not isinstance(match, dict):
             match = {}

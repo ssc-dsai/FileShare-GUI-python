@@ -135,27 +135,29 @@ def semantic_match(
     high_threshold: float = 0.55,
     medium_threshold: float = 0.35,
     excerpt_length: int = 500,
+    use_instruction: bool = False,
+    instruction: str = "",
+    chunk_chars: int = 450,
 ) -> dict:
-    """
-    Hierarchical semantic classification of one document.
-
-    Returns hierarchy fields + six Match Excerpt columns (EN/FR)
-    + confidence scores.
-    """
     text = (text or "").strip()
     if len(text) < 40 or hierarchy_df.empty or embedder is None:
         return _fallback_unknown()
 
-    # ---- Chunk + embed document ----
-    chunks = chunk_text(text)
+    chunks = chunk_text(text, max_chars=int(chunk_chars or 450))
     if not chunks:
         return _fallback_unknown()
 
     chunk_texts = [c["text"] for c in chunks]
+    if use_instruction and instruction:
+        # Official Qwen pattern: instruction on the query (document), not the FCP rows
+        chunk_texts = [
+            f"Instruct: {instruction}\nQuery: {t}" for t in chunk_texts
+        ]
+
     chunk_embs = embedder.encode(
         chunk_texts,
         normalize_embeddings=True,
-        batch_size=32,
+        batch_size=16 if use_instruction else 32,
         show_progress_bar=False,
     )
     chunk_embs = np.asarray(chunk_embs, dtype=np.float32)

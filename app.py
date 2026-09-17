@@ -27,7 +27,8 @@ from backend.runners import (
 from project_config import (
     CLASSIFICATION_RESULTS_DIR,
     DEDUPS_DIR,
-    EMBEDDING_MODEL_PATH,
+    EMBEDDING_MODEL_MINILM_PATH,
+    EMBEDDING_MODEL_QWEN_PATH,
     EXTRACTED_TEXTS_DIR,
     INJECTED_METADATA_DIR,
     PLACEHOLDERS_DIR,
@@ -35,7 +36,6 @@ from project_config import (
     VISION_MODEL_PATH,
 )
 
-# Optional: status helper (falls back if missing)
 try:
     from backend.status import status_markdown as _status_markdown
 except Exception:
@@ -46,9 +46,6 @@ except Exception:
         )
 
 
-# ---------------------------------------------------------------------------
-# CSS (Gradio 6: pass to launch(), not Blocks())
-# ---------------------------------------------------------------------------
 CSS = """
 .log-box textarea {
     font-family: ui-monospace, Consolas, "Courier New", monospace !important;
@@ -58,9 +55,6 @@ CSS = """
 """
 
 
-# ---------------------------------------------------------------------------
-# UI helpers
-# ---------------------------------------------------------------------------
 def refresh_dashboard() -> str:
     return _status_markdown()
 
@@ -77,15 +71,23 @@ def ui_run_ingestion() -> str:
     return f"{header}\n\n```\n{log}\n```"
 
 
-def ui_run_classification() -> str:
-    ok, log, _ = run_classification()
+def ui_run_classification(embedder_choice: str) -> str:
+    key = "qwen3" if "qwen" in (embedder_choice or "").lower() else "minilm"
+    stem = (
+        "classification_results_qwen3"
+        if key == "qwen3"
+        else "classification_results_minilm"
+    )
+    ok, log, _ = run_classification(key)
     header = "✅ Classification finished" if ok else "❌ Classification failed"
-    extra = f"\n\nExcel: `{CLASSIFICATION_RESULTS_DIR / 'classification_results.xlsx'}`"
+    extra = f"\n\nExcel: `{CLASSIFICATION_RESULTS_DIR / (stem + '.xlsx')}`"
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
 
 
 def ui_run_placeholders(excel_name: str) -> str:
-    ok, log, _ = run_placeholder_creator(excel_name.strip() or "classification_results.xlsx")
+    ok, log, _ = run_placeholder_creator(
+        excel_name.strip() or "classification_results_minilm.xlsx"
+    )
     header = "✅ Placeholders created" if ok else "❌ Placeholder creation failed"
     extra = f"\n\nFolder: `{PLACEHOLDERS_DIR}`"
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
@@ -102,33 +104,29 @@ def ui_stop() -> str:
     ok, log, _ = run_stop()
     return log
 
-# ---------------------------------------------------------------------------
-# Build UI
-# ---------------------------------------------------------------------------
+
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="FileShare CleanUp") as demo:
         gr.Markdown(
             """
             # FileShare CleanUp
-            Document classification, metadata, and litigation search orchestrator.
+            Document classification and metadata orchestrator.
 
-            Paths come from `project_config.py` / `ENV_*` env vars. **Restart** after path changes.
+            Paths come from `project_config.py`. **Restart** after path changes.
             """
         )
 
-        # ===================== Dashboard =====================
         with gr.Tab("Dashboard"):
             gr.Markdown("### Operational snapshot")
             dash_md = gr.Markdown(value=refresh_dashboard())
             btn_refresh = gr.Button("🔄 Refresh status", variant="secondary")
             btn_refresh.click(fn=refresh_dashboard, inputs=None, outputs=dash_md)
 
-        # ===================== Configuration =====================
         with gr.Tab("Configuration"):
             gr.Markdown(
                 """
                 ### Path groups
-                Edit `project_config.py` or environment variables, then **restart** the app.
+                Edit `project_config.py`, then **restart** the app.
                 Live path editing in the UI is not supported.
                 """
             )
@@ -140,11 +138,20 @@ def build_ui() -> gr.Blocks:
             gr.Textbox(label="INJECTED_METADATA_DIR", value=str(INJECTED_METADATA_DIR), interactive=False)
             gr.Textbox(label="PLACEHOLDERS_DIR", value=str(PLACEHOLDERS_DIR), interactive=False)
 
-            gr.Markdown("#### Models")
-            gr.Textbox(label="EMBEDDING_MODEL_PATH", value=str(EMBEDDING_MODEL_PATH), interactive=False)
+            gr.Markdown("#### Embedding models (Classification) — one loaded at a time")
+            with gr.Row():
+                gr.Textbox(
+                    label="EMBEDDING_MODEL_MINILM_PATH",
+                    value=str(EMBEDDING_MODEL_MINILM_PATH),
+                    interactive=False,
+                )
+                gr.Textbox(
+                    label="EMBEDDING_MODEL_QWEN_PATH",
+                    value=str(EMBEDDING_MODEL_QWEN_PATH),
+                    interactive=False,
+                )
             gr.Textbox(label="VISION_MODEL_PATH", value=str(VISION_MODEL_PATH), interactive=False)
 
-        # ===================== 0 Dedup =====================
         with gr.Tab("0 · Deduplication"):
             gr.Markdown(
                 f"""
@@ -159,7 +166,6 @@ def build_ui() -> gr.Blocks:
             dedup_log = gr.Textbox(label="Log output", lines=20, max_lines=40, elem_classes=["log-box"])
             btn_dedup.click(fn=ui_run_dedup, outputs=dedup_log)
 
-        # ===================== 1 Ingestion =====================
         with gr.Tab("1 · Ingestion"):
             gr.Markdown(
                 f"""
@@ -172,33 +178,49 @@ def build_ui() -> gr.Blocks:
             ingest_log = gr.Textbox(label="Log output", lines=20, max_lines=40, elem_classes=["log-box"])
             btn_ingest.click(fn=ui_run_ingestion, outputs=ingest_log)
 
-        # ===================== 2 Classification =====================
         with gr.Tab("2 · Classification"):
             gr.Markdown(
                 f"""
                 ### Phase 2 – Classification
                 **Prerequisite:** extracted `.txt` files in `{EXTRACTED_TEXTS_DIR}`
 
-                MiniLM hierarchy match + optional Qwen2-VL for vision-flagged files.  
-                Output: `{CLASSIFICATION_RESULTS_DIR / "classification_results.xlsx"}`
+                Choose **one** embedding model. Only that model is loaded.
+                Caches: `embedding_cache/minilm` vs `embedding_cache/qwen3_0.6b`.
+                Reports:
+                - MiniLM → `classification_results_minilm.xlsx`
+                - Qwen3 → `classification_results_qwen3.xlsx`
+
+                Folder: `{CLASSIFICATION_RESULTS_DIR}`
                 """
+            )
+            embedder_radio = gr.Radio(
+                label="Embedding model (one at a time)",
+                choices=[
+                    "MiniLM (fast baseline)",
+                    "Qwen3-Embedding-0.6B (stronger, GPU)",
+                ],
+                value="MiniLM (fast baseline)",
             )
             btn_class = gr.Button("▶ Run Classification", variant="primary")
             class_log = gr.Textbox(label="Log output", lines=20, max_lines=40, elem_classes=["log-box"])
-            btn_class.click(fn=ui_run_classification, outputs=class_log)
+            btn_class.click(
+                fn=ui_run_classification,
+                inputs=embedder_radio,
+                outputs=class_log,
+            )
 
-        # ===================== Metadata =====================
         with gr.Tab("3–4 · Metadata"):
             gr.Markdown(
                 f"""
                 ### Phase 3 – Placeholders
-                **Prerequisite:** `classification_results.xlsx` exists.  
+                **Prerequisite:** a classification Excel exists.  
+                Type the file you want (MiniLM or Qwen3).  
                 Writes JSON under `{PLACEHOLDERS_DIR}`
                 """
             )
             excel_name = gr.Textbox(
                 label="Classification Excel filename",
-                value="classification_results.xlsx",
+                value="classification_results_minilm.xlsx",
             )
             btn_ph = gr.Button("▶ Create Placeholders", variant="primary")
             ph_log = gr.Textbox(label="Log (Placeholders)", lines=12, max_lines=25, elem_classes=["log-box"])
@@ -231,22 +253,22 @@ def build_ui() -> gr.Blocks:
             )
         btn_stop.click(fn=ui_stop, inputs=None, outputs=stop_log)
 
-        # ===================== Help =====================
         with gr.Tab("Help"):
             gr.Markdown(
                 """
                 ## Runbook
 
                 ### Classification pipeline
-                1. **0 · Deduplication** (optional) → review Excel → delete confirmed duplicates  
-                2. **1 · Ingestion** → extracted texts  
-                3. **2 · Classification** → Excel + vision descriptions  
-                4. **3 · Placeholders** → JSON side-cars  
-                5. **4 · Injector** → clones + native metadata where possible  
+                1. **0 · Deduplication** (optional) → review Excel → delete confirmed duplicates
+                2. **1 · Ingestion** → extracted texts
+                3. **2 · Classification** → pick MiniLM or Qwen3 → separate Excel reports
+                4. **3 · Placeholders** → enter the Excel filename you want to use
+                5. **4 · Injector** → clones + native metadata where possible
 
                 ### Notes
-                - Change paths only via `project_config.py` or `ENV_*` env vars, then **restart**.  
-                - Closing the browser does **not** stop a long job already running on the server.  
+                - Change paths only via `project_config.py`, then **restart**.
+                - Closing the browser does **not** stop a job already running on the server.
+                - `Litigation_hold` stays on the classification Excel (default No).
                 """
             )
 

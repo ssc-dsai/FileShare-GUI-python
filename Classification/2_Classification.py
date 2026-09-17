@@ -1,10 +1,13 @@
 # Classification/2_Classification.py
-# Phase 2 – Classification (MiniLM hierarchy + multi-image vision)
+# Phase 2 – Classification
 #
 #   python Classification/2_Classification.py
+#   python Classification/2_Classification.py --embedder minilm
+#   python Classification/2_Classification.py --embedder qwen3
 
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
 from pathlib import Path
@@ -18,10 +21,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from project_config import (
     CLASSIFICATION_RESULTS_DIR,
-    EMBEDDING_MODEL_PATH,
     EXTRACTED_TEXTS_DIR,
+    QWEN_DOC_INSTRUCTION,
     SOURCE_DOCS_DIR,
     VISION_MODEL_PATH,
+    resolve_embedder,
 )
 
 from Classification.config_classification import COLUMNS_ORDER, HIERARCHY_CSV
@@ -63,12 +67,19 @@ def find_original_file(stem: str) -> Path | None:
     return None
 
 
-def run_classification() -> None:
+def run_classification(embedder_key: str = "minilm") -> None:
+    cfg = resolve_embedder(embedder_key)
+    model_path = cfg["path"]
+    cache_dir = cfg["cache_dir"]
+
     logger.info("=" * 70)
     logger.info("CLASSIFICATION STARTED")
+    logger.info(f"Embedder key    : {cfg['key']} — {cfg['label']}")
+    logger.info(f"Embedding model : {model_path}")
+    logger.info(f"Cache dir       : {cache_dir}")
+    logger.info(f"Instruction     : {cfg['use_instruction']}")
     logger.info(f"Extracted texts : {EXTRACTED_TEXTS_DIR}")
     logger.info(f"Output          : {CLASSIFICATION_RESULTS_DIR}")
-    logger.info(f"Embedding model : {EMBEDDING_MODEL_PATH}")
     logger.info(f"Vision model    : {VISION_MODEL_PATH}")
     logger.info("=" * 70)
 
@@ -83,14 +94,17 @@ def run_classification() -> None:
 
     logger.info(f"Found {len(txt_files)} documents")
 
-    if not EMBEDDING_MODEL_PATH.exists():
-        raise FileNotFoundError(f"Embedding model not found: {EMBEDDING_MODEL_PATH}")
+    if not model_path.exists():
+        raise FileNotFoundError(
+            f"Embedding model not found: {model_path}\n"
+            f"Download it first, then retry."
+        )
 
-    logger.info("Loading local MiniLM embedder...")
-    embedder = SentenceTransformer(str(EMBEDDING_MODEL_PATH))
+    logger.info(f"Loading embedder from {model_path} (this model only)...")
+    embedder = SentenceTransformer(str(model_path))
     logger.info("Embedder ready")
 
-    cache_dir = CLASSIFICATION_RESULTS_DIR / "embedding_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
     hierarchy_df, indexes = load_or_build_hierarchy_index(
         HIERARCHY_CSV, embedder, cache_dir=cache_dir
     )
@@ -129,6 +143,9 @@ def run_classification() -> None:
                 hierarchy_df=hierarchy_df,
                 indexes=indexes,
                 vision_description=vision_desc,
+                use_instruction=cfg["use_instruction"],
+                instruction=QWEN_DOC_INSTRUCTION if cfg["use_instruction"] else "",
+                chunk_chars=cfg["chunk_chars"],
             )
 
             if title:
@@ -140,6 +157,8 @@ def run_classification() -> None:
             else:
                 row["vision_flagged"] = "No"
                 row["Vision_Description"] = "N/A"
+
+            row["embedding_model"] = cfg["key"]
 
             for col in COLUMNS_ORDER:
                 row.setdefault(col, "")
@@ -165,12 +184,19 @@ def run_classification() -> None:
     CLASSIFICATION_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(results)
     try:
-        df = df.reindex(columns=COLUMNS_ORDER, fill_value="")
+        ordered = list(COLUMNS_ORDER)
+        if "embedding_model" not in ordered:
+            ordered = ordered + ["embedding_model"]
+        df = df.reindex(columns=ordered, fill_value="")
     except Exception:
         pass
 
-    csv_path = CLASSIFICATION_RESULTS_DIR / "classification_results.csv"
-    xlsx_path = CLASSIFICATION_RESULTS_DIR / "classification_results.xlsx"
+    stem = cfg.get("results_stem") or (
+        "classification_results_qwen3" if cfg.get("key") == "qwen3"
+        else "classification_results_minilm"
+    )
+    csv_path = CLASSIFICATION_RESULTS_DIR / f"{stem}.csv"
+    xlsx_path = CLASSIFICATION_RESULTS_DIR / f"{stem}.xlsx"
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
     df.to_excel(xlsx_path, index=False, engine="openpyxl")
 
@@ -178,12 +204,25 @@ def run_classification() -> None:
     logger.info(f"Excel saved: {xlsx_path}")
 
     print("\n" + "=" * 70)
-    print(f"Classification complete | {len(results)} documents")
+    print(f"Classification complete | {len(results)} documents | embedder={cfg.get('key')}")
     print(f"CSV  : {csv_path}")
     print(f"Excel: {xlsx_path}")
+    print(f"Cache: {cfg.get('cache_dir')}")
     print(f"Log  : {LOG_FILE}")
     print("=" * 70)
 
 
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--embedder",
+        default="minilm",
+        choices=["minilm", "qwen3"],
+        help="Which local embedding model to load (only one is loaded).",
+    )
+    args = parser.parse_args()
+    run_classification(args.embedder)
+
+
 if __name__ == "__main__":
-    run_classification()
+    main()

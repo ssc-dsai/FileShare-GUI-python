@@ -129,8 +129,14 @@ def run_ingestion() -> Result:
     return _capture_sub("Ingestion/1_Ingestion.py")
 
 
-def run_classification() -> Result:
-    return _capture_sub("Classification/2_Classification.py")
+def run_classification(embedder_key: str = "minilm") -> Result:
+    key = (embedder_key or "minilm").strip().lower()
+    if key not in ("minilm", "qwen3"):
+        key = "minilm"
+    return _capture_sub(
+        "Classification/2_Classification.py",
+        ["--embedder", key],
+    )
 
 
 def run_placeholder_creator(excel_name: str = "classification_results.xlsx") -> Result:
