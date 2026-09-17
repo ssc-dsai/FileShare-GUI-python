@@ -1,7 +1,7 @@
 ```markdown
 # FileShare-GUI
 
-Local Gradio application for **document deduplication, text extraction, semantic classification (FCP hierarchy), metadata injection, and litigation package / search**.
+Local Gradio application for **document deduplication, text extraction, semantic classification (FCP hierarchy) and metadata injection**.
 
 Designed to run **entirely on a single Windows workstation** (or similar), with **no required cloud services** at runtime. Hugging Face is used **only once** to download embedding and vision models to disk; after that the pipeline can run **offline**.
 
@@ -16,7 +16,6 @@ Designed to run **entirely on a single Windows workstation** (or similar), with 
 | 2 | **Classification** | Match document text to the FCP hierarchy (`fcp_CSV-UTF.csv`) using a local MiniLM embedding model; bilingual match excerpts; optional multi-image descriptions via local Qwen2-VL; enrich document type & sensitivity |
 | 3 | **Placeholders** | Build JSON side-cars from `classification_results.xlsx` (including user edits to litigation/archival flags) |
 | 4 | **Metadata injector** | Clone originals and inject metadata (native Office properties when possible; always JSON side-car) |
-| 5 | **Litigation** | Build a condensed litigation package from court-case files; index a search corpus; hybrid search and Excel report |
 
 A **Gradio** web UI orchestrates all phases (Dashboard, Configuration view, Stop control, per-phase logs).
 
@@ -25,7 +24,7 @@ A **Gradio** web UI orchestrates all phases (Dashboard, Configuration view, Stop
 ## Design principles
 
 - **Local-first / offline runtime** — no Ollama, no OCR cloud APIs, no required internet after model download  
-- **Independent absolute paths** — source docs, extracts, results, models, and litigation folders can each live on different drives or DFS shares  
+- **Independent absolute paths** — source docs, extracts, results and models can each live on different drives or DFS shares  
 - **One config file** — set paths in `project_config.py` once per machine, then restart the app  
 - **Human review** — classification and dedup produce Excel workbooks; selected columns (e.g. litigation hold) can be edited before placeholders/injection  
 - **Managed-device friendly** — no admin install required if Python/conda is already available; distribute as a GitHub ZIP  
@@ -55,7 +54,6 @@ FileShare-GUI/
 ├── DeDuplication/
 ├── Metadata_Placeholder/
 ├── Metadata_Injector/
-├── Litigation/
 └── Resources-Sources/     # fcp_CSV-UTF.csv, dictionaries, RegEx, etc.
 ```
 
@@ -128,7 +126,7 @@ Create a models root (example):
 C:\FileShareData\models
 ```
 
-### Embedding model (required for classification & litigation vectors)
+### Embedding model (required for classification vectors)
 
 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
 
@@ -170,7 +168,6 @@ Typical entries:
 | `CLASSIFICATION_RESULTS_DIR` | Excel/CSV + embedding cache |
 | `DEDUPS_DIR` | Deduplication reports |
 | `INJECTED_METADATA_DIR` | Clones + placeholders |
-| `LITIGATION_*` | Case source, packages, search corpus, index, reports |
 | `MODELS_DIR` / `EMBEDDING_MODEL_PATH` / `VISION_MODEL_PATH` | Local model folders |
 | `RESOURCES` paths | `fcp_CSV-UTF.csv`, dictionaries, RegEx, trivial subjects |
 
@@ -205,14 +202,13 @@ http://127.0.0.1:7860
 
 ## 6. Typical end-to-end workflow
 
-1. Place documents under `SOURCE_DOCS_DIR`.  
+1. Place documents [Classification](Classification)under `SOURCE_DOCS_DIR`.  
 2. **Deduplication** → review Excel → optional delete (prefer dry-run first).  
 3. **Ingestion** → `.txt` under extracted texts; images under `extracted_texts/_images`.  
 4. **Classification** → `classification_results.xlsx`.  
 5. Optional: edit Excel (`Litigation_hold`, `Archival_value`, `critical_business_content`, etc.).  
 6. **Placeholders** → JSON side-cars (re-run after Excel edits).  
-7. **Metadata injector** → clones + metadata.  
-8. **Litigation** (separate from classification): package builder → index → search → report.
+7. **Metadata injector** → clones + metadata.
 
 **Fixed classification metadata (not from FCP):**
 
@@ -274,8 +270,8 @@ Internal use under **ssc-dsai**. Adjust license and contact as required by your 
 ## Configure paths (required)
 
 Before the first run, open **`project_config.py`** and set every absolute
-path for this machine (source documents, extracted texts, results, models,
-litigation folders). Save the file and restart the app after any change.
+path for this machine (source documents, extracted texts, results and models.
+Save the file and restart the app after any change.
 
 # =============================================================================
 # PATH CONFIGURATION (REQUIRED ON EACH MACHINE)
