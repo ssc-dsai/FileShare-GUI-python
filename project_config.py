@@ -1,19 +1,11 @@
 # project_config.py
 """
 CENTRALIZED PROJECT CONFIGURATION - SINGLE SOURCE OF TRUTH
-All scripts import paths and settings from here.
+Edit the absolute paths in this file for each machine. Save, then restart the app.
 
 DESIGN
 ------
 Every major working directory is an INDEPENDENT absolute path.
-This supports real Microsoft DFS / network-share environments where:
-  - Source documents live on one share
-  - Extracted texts, classification results, placeholders, clones, and
-    litigation packages live on completely different volumes or shares.
-
-Priority for each path:
-  1. Environment variable (if set)
-  2. Default value written in this file
 """
 
 from pathlib import Path
@@ -50,39 +42,6 @@ INJECTED_METADATA_DIR = Path(os.getenv(
 
 PLACEHOLDERS_DIR = INJECTED_METADATA_DIR / "placeholders"
 
-# Creates a Summarized Package from the Court Case Files
-LITIGATION_PACKAGES_DIR = Path(os.getenv(
-    "LITIGATION_PACKAGES",
-    r"C:\JAY_DOCS\Litigation_Packages"
-)).resolve()
-
-# Folder of court-case documents used to BUILD a litigation package
-LITIGATION_CASE_SOURCE_DIR = Path(os.getenv(
-    "LITIGATION_CASE_SOURCE_DIR",
-    r"C:\JAY_DOCS\Litigation_Cases"   # put court-case files here
-)).resolve()
-
-LITIGATION_REPORTS_DIR = Path(os.getenv(
-    "LITIGATION_REPORTS",
-    r"C:\JAY_DOCS\Litigation_Reports"
-)).resolve()
-
-# Folder the end-user searches / packages from (matter share, review set, etc.)
-LITIGATION_SEARCH_DIR = Path(os.getenv(
-    "TARGET_LITIGATION_SEARCH_DIR",
-    r"C:\JAY_DOCS\Synthetic_Docs"
-)).resolve()
-
-LITIGATION_INDEX_DIR = Path(os.getenv(
-    "LITIGATION_INDEX_DIR",
-    r"C:\JAY_DOCS\Litigation_Index"
-)).resolve()
-
-
-
-LITIGATION_SEARCH_ROOT = SOURCE_DOCS_DIR
-LITIGATION_CONFIDENCE_THRESHOLD = 0.65
-
 # ──────────────────────────────────────────────────────────────────
 # LOCAL MODELS (fully offline)
 # ──────────────────────────────────────────────────────────────────
@@ -91,19 +50,16 @@ MODELS_DIR = Path(os.getenv(
     r"C:\JAY_DOCS\models"
 )).resolve()
 
-# Embedding model – used for FCP hierarchy matching + Match Excerpts
 EMBEDDING_MODEL_PATH = Path(os.getenv(
     "EMBEDDING_MODEL",
     str(MODELS_DIR / "paraphrase-multilingual-MiniLM-L12-v2")
 )).resolve()
 
-# Vision-Language model – used only for vision-flagged files + short rationales
 VISION_MODEL_PATH = Path(os.getenv(
     "VISION_MODEL",
     str(MODELS_DIR / "Qwen2-VL-2B-Instruct")
 )).resolve()
 
-# Kept for backward compatibility / future text-only generative use
 CLASSIFICATION_MODEL_PATH = VISION_MODEL_PATH
 
 # ──────────────────────────────────────────────────────────────────
@@ -126,10 +82,6 @@ def ensure_directories():
         DEDUPS_DIR,
         INJECTED_METADATA_DIR,
         PLACEHOLDERS_DIR,
-        LITIGATION_PACKAGES_DIR,
-        LITIGATION_REPORTS_DIR,
-        LITIGATION_SEARCH_DIR,
-        LITIGATION_CASE_SOURCE_DIR,
         MODELS_DIR,
     ]
     for d in dirs:
@@ -142,13 +94,9 @@ def ensure_directories():
     print(f"   • Deduplication          : {DEDUPS_DIR}")
     print(f"   • Injected metadata      : {INJECTED_METADATA_DIR}")
     print(f"   • Placeholders           : {PLACEHOLDERS_DIR}")
-    print(f"   • Litigation Packages    : {LITIGATION_PACKAGES_DIR}")
-    print(f"   • Litigation Reports     : {LITIGATION_REPORTS_DIR}")
-    print(f"   • Litigation search source : {LITIGATION_SEARCH_DIR}")
     print(f"   • Local models           : {MODELS_DIR}")
 
 
-# Auto-run when imported
 ensure_directories()
 
 print("🚀 Central config loaded (independent absolute paths)")

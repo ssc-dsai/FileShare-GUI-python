@@ -312,7 +312,4 @@ Paths are set only in project_config.py. Change paths there, save, then restart 
 ### Metadata Placeholder and Injection
 ![Metadata](docs/images/6_Metadata.png)
 
-### Search Engine for Litigation Documents
-![Litigation](docs/images/7_Litigation.png)
-
 ```

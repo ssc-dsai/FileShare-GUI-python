@@ -144,42 +144,6 @@ def run_metadata_injector() -> Result:
     return _capture_sub("Metadata_Injector/5_metadata_injector.py")
 
 
-# ---------------------------------------------------------------------------
-# Litigation
-# ---------------------------------------------------------------------------
-def run_litigation_package(
-    input_folder: str,
-    output_name: Optional[str] = None,
-) -> Result:
-    args: List[str] = ["--input", input_folder]
-    if output_name:
-        args.extend(["--name", output_name])
-    return _capture_sub("Litigation/6_litigation_package.py", args)
-
-
-def run_litigation_index(rebuild: bool = True) -> Result:
-    args = ["--rebuild"] if rebuild else []
-    return _capture_sub("Litigation/7_litigation_index.py", args)
-
-
-def run_litigation_search(
-    package_path: str,
-    top_k: int = 50,
-    min_score: float = 0.22,
-) -> Result:
-    return _capture_sub(
-        "Litigation/8_litigation_search.py",
-        [
-            "--package",
-            package_path,
-            "--top_k",
-            str(int(top_k)),
-            "--min_score",
-            str(float(min_score)),
-        ],
-    )
-
-
 # Optional: ensure dirs if you still call it from Dashboard
 def run_ensure_directories() -> Result:
     try:

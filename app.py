@@ -20,9 +20,6 @@ from backend.runners import (
     run_classification,
     run_dedup_analysis,
     run_ingestion,
-    run_litigation_index,
-    run_litigation_package,
-    run_litigation_search,
     run_metadata_injector,
     run_placeholder_creator,
     run_stop,
@@ -33,11 +30,6 @@ from project_config import (
     EMBEDDING_MODEL_PATH,
     EXTRACTED_TEXTS_DIR,
     INJECTED_METADATA_DIR,
-    LITIGATION_CASE_SOURCE_DIR,
-    LITIGATION_INDEX_DIR,
-    LITIGATION_PACKAGES_DIR,
-    LITIGATION_REPORTS_DIR,
-    LITIGATION_SEARCH_DIR,
     PLACEHOLDERS_DIR,
     SOURCE_DOCS_DIR,
     VISION_MODEL_PATH,
@@ -106,35 +98,6 @@ def ui_run_injector() -> str:
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
 
 
-def ui_run_litigation_package(name: str) -> str:
-    ok, log, _ = run_litigation_package(
-        str(LITIGATION_CASE_SOURCE_DIR),
-        (name or "").strip() or None,
-    )
-    header = "✅ Litigation package built" if ok else "❌ Litigation package failed"
-    return f"{header}\n\n```\n{log}\n```"
-
-
-def ui_run_litigation_index(rebuild: bool) -> str:
-    ok, log, _ = run_litigation_index(rebuild=bool(rebuild))
-    header = "✅ Index finished" if ok else "❌ Index failed"
-    extra = f"\n\nIndex dir: `{LITIGATION_INDEX_DIR}`"
-    return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
-
-
-def ui_run_litigation_search(pkg: str, top_k: float, min_score: float) -> str:
-    pkg = (pkg or "").strip()
-    if not pkg:
-        return "❌ Enter the full path to the package .txt file."
-    ok, log, _ = run_litigation_search(
-        pkg,
-        top_k=int(top_k or 50),
-        min_score=float(min_score or 0.22),
-    )
-    header = "✅ Search + report finished" if ok else "❌ Search failed"
-    extra = f"\n\nReports: `{LITIGATION_REPORTS_DIR}`"
-    return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
-
 def ui_stop() -> str:
     ok, log, _ = run_stop()
     return log
@@ -180,13 +143,6 @@ def build_ui() -> gr.Blocks:
             gr.Markdown("#### Models")
             gr.Textbox(label="EMBEDDING_MODEL_PATH", value=str(EMBEDDING_MODEL_PATH), interactive=False)
             gr.Textbox(label="VISION_MODEL_PATH", value=str(VISION_MODEL_PATH), interactive=False)
-
-            gr.Markdown("#### Litigation")
-            gr.Textbox(label="LITIGATION_CASE_SOURCE_DIR", value=str(LITIGATION_CASE_SOURCE_DIR), interactive=False)
-            gr.Textbox(label="LITIGATION_PACKAGES_DIR", value=str(LITIGATION_PACKAGES_DIR), interactive=False)
-            gr.Textbox(label="LITIGATION_SEARCH_DIR", value=str(LITIGATION_SEARCH_DIR), interactive=False)
-            gr.Textbox(label="LITIGATION_INDEX_DIR", value=str(LITIGATION_INDEX_DIR), interactive=False)
-            gr.Textbox(label="LITIGATION_REPORTS_DIR", value=str(LITIGATION_REPORTS_DIR), interactive=False)
 
         # ===================== 0 Dedup =====================
         with gr.Tab("0 · Deduplication"):
@@ -259,84 +215,6 @@ def build_ui() -> gr.Blocks:
             btn_inj = gr.Button("▶ Run Metadata Injector", variant="primary")
             inj_log = gr.Textbox(label="Log (Injector)", lines=12, max_lines=25, elem_classes=["log-box"])
             btn_inj.click(fn=ui_run_injector, outputs=inj_log)
-
-        # ===================== Litigation =====================
-        with gr.Tab("5 · Litigation"):
-            gr.Markdown(
-                f"""
-                ### Paths (from Configuration)
-                - **Case source (package input):** `{LITIGATION_CASE_SOURCE_DIR}`
-                - **Packages output:** `{LITIGATION_PACKAGES_DIR}`
-                - **Search corpus:** `{LITIGATION_SEARCH_DIR}`
-                - **Index:** `{LITIGATION_INDEX_DIR}`
-                - **Reports:** `{LITIGATION_REPORTS_DIR}`
-                """
-            )
-
-            gr.Markdown("### 1 · Build compact package")
-            lit_output_name = gr.Textbox(
-                label="Package name (optional)",
-                placeholder="Leave blank to use the case-source folder name",
-            )
-            btn_lit_package = gr.Button("▶ Build Litigation Package", variant="primary")
-            lit_package_log = gr.Textbox(label="Package log", lines=12, max_lines=25, elem_classes=["log-box"])
-            btn_lit_package.click(
-                fn=ui_run_litigation_package,
-                inputs=[lit_output_name],
-                outputs=lit_package_log,
-            )
-
-            gr.Markdown("---")
-            gr.Markdown(
-                f"""
-                ### 2 · Build / rebuild search index
-                Indexes **`LITIGATION_SEARCH_DIR`** (`{LITIGATION_SEARCH_DIR}`).  
-                Originals are never modified. Run once, or after the corpus changes.
-                """
-            )
-            lit_rebuild = gr.Checkbox(
-                label="Rebuild index from scratch (check to force rebuild)",
-                value=True,
-            )
-            btn_lit_index = gr.Button("▶ Build / Rebuild Index", variant="primary")
-            lit_index_log = gr.Textbox(label="Index log", lines=12, max_lines=25, elem_classes=["log-box"])
-            btn_lit_index.click(
-                fn=ui_run_litigation_index,
-                inputs=[lit_rebuild],
-                outputs=lit_index_log,
-            )
-
-            gr.Markdown("---")
-            gr.Markdown(
-                """
-                ### 3 · Search with package → Excel report
-                **Prerequisite:** index exists (`chunks_embeddings.npy` + `bm25_corpus.pkl`) and package `.txt`.
-                Uses package as query (MiniLM + BM25 on tombstone when facts exist).
-                """
-            )
-            default_pkg = str(
-                LITIGATION_PACKAGES_DIR
-                / LITIGATION_CASE_SOURCE_DIR.name
-                / f"{LITIGATION_CASE_SOURCE_DIR.name}.txt"
-            )
-            lit_package_path = gr.Textbox(
-                label="Package file (.txt) used as query",
-                value=default_pkg,
-            )
-            lit_top_k = gr.Number(label="Top K results", value=50, precision=0)
-            lit_min_score = gr.Number(label="Min vector similarity score", value=0.22)
-            btn_lit_search = gr.Button("▶ Run Search + Report", variant="primary")
-            lit_search_log = gr.Textbox(
-                label="Search / report log",
-                lines=14,
-                max_lines=30,
-                elem_classes=["log-box"],
-            )
-            btn_lit_search.click(
-                fn=ui_run_litigation_search,
-                inputs=[lit_package_path, lit_top_k, lit_min_score],
-                outputs=lit_search_log,
-            )
 
         gr.Markdown(
             """
