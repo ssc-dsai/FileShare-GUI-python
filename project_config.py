@@ -2,10 +2,6 @@
 """
 CENTRALIZED PROJECT CONFIGURATION - SINGLE SOURCE OF TRUTH
 Edit the absolute paths in this file for each machine. Save, then restart the app.
-
-DESIGN
-------
-Every major working directory is an INDEPENDENT absolute path.
 """
 
 from pathlib import Path
@@ -40,14 +36,19 @@ INJECTED_METADATA_DIR = Path(os.getenv(
     r"C:\JAY_DOCS\Injected_Metadata"
 )).resolve()
 
-PLACEHOLDERS_DIR = INJECTED_METADATA_DIR / "placeholders"
+# Per-model output trees (placeholders + clones)
+INJECTED_MINILM_DIR = INJECTED_METADATA_DIR / "minilm"
+INJECTED_QWEN_DIR = INJECTED_METADATA_DIR / "qwen3"
+PLACEHOLDERS_MINILM_DIR = INJECTED_MINILM_DIR / "placeholders"
+PLACEHOLDERS_QWEN_DIR = INJECTED_QWEN_DIR / "placeholders"
+
 
 def metadata_dirs_for(embedder_key: str) -> dict:
     """Separate placeholder + clone folders per embedding model."""
     key = (embedder_key or "minilm").strip().lower()
     if key not in ("minilm", "qwen3"):
         key = "minilm"
-    root = INJECTED_METADATA_DIR / key
+    root = INJECTED_MINILM_DIR if key == "minilm" else INJECTED_QWEN_DIR
     return {
         "key": key,
         "root": root,
@@ -72,7 +73,6 @@ EMBEDDING_MODEL_QWEN_PATH = Path(os.getenv(
     str(MODELS_DIR / "Qwen3-Embedding-0.6B")
 )).resolve()
 
-# Alias used by older scripts (MiniLM)
 EMBEDDING_MODEL_PATH = EMBEDDING_MODEL_MINILM_PATH
 
 VISION_MODEL_PATH = Path(os.getenv(
@@ -136,7 +136,10 @@ def ensure_directories():
         CLASSIFICATION_RESULTS_DIR,
         DEDUPS_DIR,
         INJECTED_METADATA_DIR,
-        PLACEHOLDERS_DIR,
+        INJECTED_MINILM_DIR,
+        INJECTED_QWEN_DIR,
+        PLACEHOLDERS_MINILM_DIR,
+        PLACEHOLDERS_QWEN_DIR,
         MODELS_DIR,
     ]
     for d in dirs:
@@ -147,8 +150,11 @@ def ensure_directories():
     print(f"   • Extracted texts        : {EXTRACTED_TEXTS_DIR}")
     print(f"   • Classification results : {CLASSIFICATION_RESULTS_DIR}")
     print(f"   • Deduplication          : {DEDUPS_DIR}")
-    print(f"   • Injected metadata      : {INJECTED_METADATA_DIR}")
-    print(f"   • Placeholders           : {PLACEHOLDERS_DIR}")
+    print(f"   • Injected parent        : {INJECTED_METADATA_DIR}")
+    print(f"   • Injected MiniLM        : {INJECTED_MINILM_DIR}")
+    print(f"   • Placeholders MiniLM    : {PLACEHOLDERS_MINILM_DIR}")
+    print(f"   • Injected Qwen3         : {INJECTED_QWEN_DIR}")
+    print(f"   • Placeholders Qwen3     : {PLACEHOLDERS_QWEN_DIR}")
     print(f"   • Local models           : {MODELS_DIR}")
     print(f"   • MiniLM embedder        : {EMBEDDING_MODEL_MINILM_PATH}")
     print(f"   • Qwen3 embedder         : {EMBEDDING_MODEL_QWEN_PATH}")
@@ -158,7 +164,7 @@ def ensure_directories():
 ensure_directories()
 
 print("🚀 Central config loaded (independent absolute paths)")
-print(f"   SOURCE_DOCS_DIR              = {SOURCE_DOCS_DIR}")
-print(f"   EMBEDDING_MODEL_MINILM_PATH  = {EMBEDDING_MODEL_MINILM_PATH}")
-print(f"   EMBEDDING_MODEL_QWEN_PATH    = {EMBEDDING_MODEL_QWEN_PATH}")
-print(f"   VISION_MODEL_PATH            = {VISION_MODEL_PATH}")
+print(f"   SOURCE_DOCS_DIR             = {SOURCE_DOCS_DIR}")
+print(f"   EMBEDDING_MODEL_MINILM_PATH = {EMBEDDING_MODEL_MINILM_PATH}")
+print(f"   EMBEDDING_MODEL_QWEN_PATH   = {EMBEDDING_MODEL_QWEN_PATH}")
+print(f"   VISION_MODEL_PATH           = {VISION_MODEL_PATH}")

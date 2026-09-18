@@ -10,8 +10,10 @@ from project_config import (
     CLASSIFICATION_RESULTS_DIR,
     DEDUPS_DIR,
     EXTRACTED_TEXTS_DIR,
-    INJECTED_METADATA_DIR,
-    PLACEHOLDERS_DIR,
+    INJECTED_MINILM_DIR,
+    INJECTED_QWEN_DIR,
+    PLACEHOLDERS_MINILM_DIR,
+    PLACEHOLDERS_QWEN_DIR,
     SOURCE_DOCS_DIR,
 )
 
@@ -59,12 +61,16 @@ def _mtime_file(path: Path) -> str:
 
 
 def collect_status() -> dict:
-    class_xlsx = CLASSIFICATION_RESULTS_DIR / "classification_results.xlsx"
-    class_csv = CLASSIFICATION_RESULTS_DIR / "classification_results.csv"
+    minilm_xlsx = CLASSIFICATION_RESULTS_DIR / "classification_results_minilm.xlsx"
+    qwen_xlsx = CLASSIFICATION_RESULTS_DIR / "classification_results_qwen3.xlsx"
 
-    injected_json = _count(INJECTED_METADATA_DIR, ["*.metadata.json", "*.json"])
-    injected_all = _count(INJECTED_METADATA_DIR)
-    injected_clones = max(0, injected_all - injected_json)
+    injected_json_m = _count(INJECTED_MINILM_DIR, ["*.metadata.json", "*.json"])
+    injected_all_m = _count(INJECTED_MINILM_DIR)
+    injected_clones_m = max(0, injected_all_m - injected_json_m)
+
+    injected_json_q = _count(INJECTED_QWEN_DIR, ["*.metadata.json", "*.json"])
+    injected_all_q = _count(INJECTED_QWEN_DIR)
+    injected_clones_q = max(0, injected_all_q - injected_json_q)
 
     resource_files = {
         "Doc_Type_Dictionary.txt": (RESOURCES_DIR / "Doc_Type_Dictionary.txt").is_file(),
@@ -73,36 +79,31 @@ def collect_status() -> dict:
         "trivial_subjects.txt": (RESOURCES_DIR / "trivial_subjects.txt").is_file(),
     }
 
-    fcp_ready = False
-    if FCP_CACHE_DIR.exists():
-        fcp_ready = (
-            (FCP_CACHE_DIR / "function_embeddings.npy").exists()
-            or (FCP_CACHE_DIR / "embeddings.npy").exists()
-            or any(FCP_CACHE_DIR.glob("*.npy"))
-        )
-    fcp_mtime = (
-        _latest_mtime(FCP_CACHE_DIR, ["*.npy", "*.json", "*.txt"])
-        if FCP_CACHE_DIR.exists()
-        else "—"
-    )
+    fcp_ready = any(FCP_CACHE_DIR.rglob("*.npy")) if FCP_CACHE_DIR.exists() else False
 
     return {
         "source_docs": _count(SOURCE_DOCS_DIR),
         "source_mtime": _latest_mtime(SOURCE_DOCS_DIR),
+        "dedup_reports": _count(DEDUPS_DIR, ["*.xlsx"]),
+        "dedup_mtime": _latest_mtime(DEDUPS_DIR, ["*.xlsx"]),
         "extracted_texts": _count(EXTRACTED_TEXTS_DIR, ["*.txt"]),
         "extracted_mtime": _latest_mtime(EXTRACTED_TEXTS_DIR, ["*.txt"]),
-        "dedup_reports": _count(DEDUPS_DIR, ["*.xlsx"]),
-        "dedup_mtime": _latest_mtime(DEDUPS_DIR, ["*.xlsx", "*.log"]),
-        "classification_excel": class_xlsx.exists(),
-        "classification_csv": class_csv.exists(),
-        "classification_mtime": _mtime_file(class_xlsx),
-        "placeholders": _count(PLACEHOLDERS_DIR, ["*.json", "*.metadata.json"]),
-        "placeholders_mtime": _latest_mtime(PLACEHOLDERS_DIR, ["*.json", "*.metadata.json"]),
-        "injected_clones": injected_clones,
-        "injected_json": injected_json,
-        "injected_mtime": _latest_mtime(INJECTED_METADATA_DIR),
+        "class_minilm": minilm_xlsx.is_file(),
+        "class_minilm_mtime": _mtime_file(minilm_xlsx),
+        "class_qwen": qwen_xlsx.is_file(),
+        "class_qwen_mtime": _mtime_file(qwen_xlsx),
+        "ph_minilm": _count(PLACEHOLDERS_MINILM_DIR, ["*.json"]),
+        "ph_minilm_mtime": _latest_mtime(PLACEHOLDERS_MINILM_DIR, ["*.json"]),
+        "ph_qwen": _count(PLACEHOLDERS_QWEN_DIR, ["*.json"]),
+        "ph_qwen_mtime": _latest_mtime(PLACEHOLDERS_QWEN_DIR, ["*.json"]),
+        "inj_json_minilm": injected_json_m,
+        "inj_clones_minilm": injected_clones_m,
+        "inj_minilm_mtime": _latest_mtime(INJECTED_MINILM_DIR),
+        "inj_json_qwen": injected_json_q,
+        "inj_clones_qwen": injected_clones_q,
+        "inj_qwen_mtime": _latest_mtime(INJECTED_QWEN_DIR),
         "fcp_index_ready": fcp_ready,
-        "fcp_index_mtime": fcp_mtime,
+        "fcp_index_mtime": _latest_mtime(FCP_CACHE_DIR, ["*.npy"]),
         "res_doc_type_dict": resource_files["Doc_Type_Dictionary.txt"],
         "res_fcp_csv": resource_files["fcp_CSV-UTF.csv"],
         "res_regex_db": resource_files["RegEx-db.csv"],
@@ -115,16 +116,13 @@ def collect_status() -> dict:
 def status_markdown() -> str:
     s = collect_status()
 
-    class_status = "Yes" if s["classification_excel"] else "No"
-    if s["classification_csv"] and s["classification_excel"]:
-        class_status = "Yes (xlsx + csv)"
-    elif s["classification_csv"]:
-        class_status = "CSV only"
-
-    fcp = "**Ready**" if s["fcp_index_ready"] else "Missing — run Classification once"
+    def yn_file(ok: bool) -> str:
+        return "Yes" if ok else "No"
 
     def yn(ok: bool) -> str:
         return "**Ready**" if ok else "Missing"
+
+    fcp = "**Ready**" if s["fcp_index_ready"] else "Missing — run Classification once"
 
     return f"""
 ### Pipeline snapshot
@@ -135,10 +133,14 @@ _Updated: **{s['now']}**_
 | Source documents | {s['source_docs']} | {s['source_mtime']} |
 | Dedup reports (.xlsx) | {s['dedup_reports']} | {s['dedup_mtime']} |
 | Extracted texts (.txt) | {s['extracted_texts']} | {s['extracted_mtime']} |
-| Classification Excel | {class_status} | {s['classification_mtime']} |
-| Placeholders (JSON) | {s['placeholders']} | {s['placeholders_mtime']} |
-| Injected side-car JSON | {s['injected_json']} | {s['injected_mtime']} |
-| Injected clones | {s['injected_clones']} | {s['injected_mtime']} |
+| Classification MiniLM | {yn_file(s['class_minilm'])} | {s['class_minilm_mtime']} |
+| Classification Qwen3 | {yn_file(s['class_qwen'])} | {s['class_qwen_mtime']} |
+| Placeholders MiniLM (JSON) | {s['ph_minilm']} | {s['ph_minilm_mtime']} |
+| Placeholders Qwen3 (JSON) | {s['ph_qwen']} | {s['ph_qwen_mtime']} |
+| Injected MiniLM side-cars | {s['inj_json_minilm']} | {s['inj_minilm_mtime']} |
+| Injected MiniLM clones | {s['inj_clones_minilm']} | {s['inj_minilm_mtime']} |
+| Injected Qwen3 side-cars | {s['inj_json_qwen']} | {s['inj_qwen_mtime']} |
+| Injected Qwen3 clones | {s['inj_clones_qwen']} | {s['inj_qwen_mtime']} |
 | FCP hierarchy index | {fcp} | {s['fcp_index_mtime']} |
 | Resources · Doc_Type_Dictionary.txt | {yn(s['res_doc_type_dict'])} | {s['resources_mtime']} |
 | Resources · fcp_CSV-UTF.csv | {yn(s['res_fcp_csv'])} | {s['resources_mtime']} |

@@ -32,7 +32,10 @@ from project_config import (
     EMBEDDING_MODEL_QWEN_PATH,
     EXTRACTED_TEXTS_DIR,
     INJECTED_METADATA_DIR,
-    PLACEHOLDERS_DIR,
+    INJECTED_MINILM_DIR,
+    INJECTED_QWEN_DIR,
+    PLACEHOLDERS_MINILM_DIR,
+    PLACEHOLDERS_QWEN_DIR,
     SOURCE_DOCS_DIR,
     VISION_MODEL_PATH,
 )
@@ -58,6 +61,16 @@ CSS = """
 
 def refresh_dashboard() -> str:
     return _status_markdown()
+
+
+def _embedder_key(choice: str) -> str:
+    return "qwen3" if "qwen" in (choice or "").lower() else "minilm"
+
+
+def _excel_for_embedder(choice: str) -> str:
+    if "qwen" in (choice or "").lower():
+        return "classification_results_qwen3.xlsx"
+    return "classification_results_minilm.xlsx"
 
 
 def ui_run_dedup() -> str:
@@ -87,7 +100,7 @@ def ui_run_ingestion() -> str:
 
 
 def ui_run_classification(embedder_choice: str) -> str:
-    key = "qwen3" if "qwen" in (embedder_choice or "").lower() else "minilm"
+    key = _embedder_key(embedder_choice)
     stem = (
         "classification_results_qwen3"
         if key == "qwen3"
@@ -99,30 +112,22 @@ def ui_run_classification(embedder_choice: str) -> str:
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
 
 
-def _excel_for_embedder(choice: str) -> str:
-    if "qwen" in (choice or "").lower():
-        return "classification_results_qwen3.xlsx"
-    return "classification_results_minilm.xlsx"
-
-
-def _embedder_key(choice: str) -> str:
-    return "qwen3" if "qwen" in (choice or "").lower() else "minilm"
-
-
 def ui_run_placeholders(embedder_choice: str, excel_name: str) -> str:
     key = _embedder_key(embedder_choice)
     name = (excel_name or "").strip() or _excel_for_embedder(embedder_choice)
     ok, log, _ = run_placeholder_creator(name, embedder_key=key)
+    out = PLACEHOLDERS_QWEN_DIR if key == "qwen3" else PLACEHOLDERS_MINILM_DIR
     header = "✅ Placeholders created" if ok else "❌ Placeholder creation failed"
-    extra = f"\n\nExcel: `{name}`\nFolder: `{INJECTED_METADATA_DIR / key / 'placeholders'}`"
+    extra = f"\n\nExcel: `{name}`\nFolder: `{out}`"
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
 
 
 def ui_run_injector(embedder_choice: str) -> str:
     key = _embedder_key(embedder_choice)
     ok, log, _ = run_metadata_injector(embedder_key=key)
+    out = INJECTED_QWEN_DIR if key == "qwen3" else INJECTED_MINILM_DIR
     header = "✅ Metadata injection finished" if ok else "❌ Metadata injection failed"
-    extra = f"\n\nOutput: `{INJECTED_METADATA_DIR / key}`"
+    extra = f"\n\nOutput: `{out}`"
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
 
 
@@ -161,10 +166,19 @@ def build_ui() -> gr.Blocks:
             gr.Textbox(label="EXTRACTED_TEXTS_DIR", value=str(EXTRACTED_TEXTS_DIR), interactive=False)
             gr.Textbox(label="CLASSIFICATION_RESULTS_DIR", value=str(CLASSIFICATION_RESULTS_DIR), interactive=False)
             gr.Textbox(label="DEDUPS_DIR", value=str(DEDUPS_DIR), interactive=False)
-            gr.Textbox(label="INJECTED_METADATA_DIR", value=str(INJECTED_METADATA_DIR), interactive=False)
-            gr.Textbox(label="PLACEHOLDERS_DIR", value=str(PLACEHOLDERS_DIR), interactive=False)
+            gr.Textbox(label="INJECTED_METADATA_DIR (parent)", value=str(INJECTED_METADATA_DIR), interactive=False)
 
-            gr.Markdown("#### Embedding models (Classification) — one loaded at a time")
+            gr.Markdown("#### Placeholders (per model)")
+            with gr.Row():
+                gr.Textbox(label="PLACEHOLDERS_MINILM_DIR", value=str(PLACEHOLDERS_MINILM_DIR), interactive=False)
+                gr.Textbox(label="PLACEHOLDERS_QWEN_DIR", value=str(PLACEHOLDERS_QWEN_DIR), interactive=False)
+
+            gr.Markdown("#### Injected clones (per model)")
+            with gr.Row():
+                gr.Textbox(label="INJECTED_MINILM_DIR", value=str(INJECTED_MINILM_DIR), interactive=False)
+                gr.Textbox(label="INJECTED_QWEN_DIR", value=str(INJECTED_QWEN_DIR), interactive=False)
+
+            gr.Markdown("#### Embedding models — one loaded at a time")
             with gr.Row():
                 gr.Textbox(
                     label="EMBEDDING_MODEL_MINILM_PATH",
@@ -186,21 +200,15 @@ def build_ui() -> gr.Blocks:
 
                 **Step A** — Run analysis. Review Excel is written under `{DEDUPS_DIR}`.
 
-                **Step B** — In that Excel, set **User_Confirmed_Delete** to `Yes`
-                for files you want removed. Save the workbook.
+                **Step B** — Set **User_Confirmed_Delete** to `Yes`, then save.
 
-                **Step C** — Type the Excel filename below.
-                - Leave **Dry-run CHECKED** to preview (nothing is deleted).
-                - **Uncheck** Dry-run only when you are ready to delete confirmed rows.
+                **Step C** — Type the Excel filename.
+                - Dry-run **CHECKED** = preview only.
+                - **Uncheck** only when ready to delete.
                 """
             )
             btn_dedup = gr.Button("▶ Run Deduplication Analysis", variant="primary")
-            dedup_log = gr.Textbox(
-                label="Analysis log",
-                lines=14,
-                max_lines=30,
-                elem_classes=["log-box"],
-            )
+            dedup_log = gr.Textbox(label="Analysis log", lines=14, max_lines=30, elem_classes=["log-box"])
             btn_dedup.click(fn=ui_run_dedup, outputs=dedup_log)
 
             gr.Markdown("---")
@@ -208,19 +216,13 @@ def build_ui() -> gr.Blocks:
             dedup_excel = gr.Textbox(
                 label="Reviewed Excel filename (in DEDUPS_DIR)",
                 value="deduplication_review_data.xlsx",
-                placeholder="deduplication_review_YYYYMMDD_HHMM.xlsx",
             )
             dedup_dry_run = gr.Checkbox(
                 label="Dry-run — CHECKED = preview only (no delete). UNCHECK = really delete rows marked Yes.",
                 value=True,
             )
             btn_dedup_del = gr.Button("▶ Run delete / dry-run", variant="secondary")
-            dedup_del_log = gr.Textbox(
-                label="Delete / dry-run log",
-                lines=12,
-                max_lines=25,
-                elem_classes=["log-box"],
-            )
+            dedup_del_log = gr.Textbox(label="Delete / dry-run log", lines=12, max_lines=25, elem_classes=["log-box"])
             btn_dedup_del.click(
                 fn=ui_run_dedup_delete,
                 inputs=[dedup_excel, dedup_dry_run],
@@ -231,7 +233,6 @@ def build_ui() -> gr.Blocks:
             gr.Markdown(
                 f"""
                 ### Phase 1 – Ingestion
-                **Prerequisite:** source documents present (Dedup optional).  
                 Writes `.txt` files to `{EXTRACTED_TEXTS_DIR}`
                 """
             )
@@ -243,13 +244,9 @@ def build_ui() -> gr.Blocks:
             gr.Markdown(
                 f"""
                 ### Phase 2 – Classification
-                **Prerequisite:** extracted `.txt` files in `{EXTRACTED_TEXTS_DIR}`
-
-                Choose **one** embedding model. Only that model is loaded.
-                Reports:
+                Choose **one** embedding model.
                 - MiniLM → `classification_results_minilm.xlsx`
                 - Qwen3 → `classification_results_qwen3.xlsx`
-
                 Folder: `{CLASSIFICATION_RESULTS_DIR}`
                 """
             )
@@ -263,22 +260,16 @@ def build_ui() -> gr.Blocks:
             )
             btn_class = gr.Button("▶ Run Classification", variant="primary")
             class_log = gr.Textbox(label="Log output", lines=20, max_lines=40, elem_classes=["log-box"])
-            btn_class.click(
-                fn=ui_run_classification,
-                inputs=embedder_radio,
-                outputs=class_log,
-            )
+            btn_class.click(fn=ui_run_classification, inputs=embedder_radio, outputs=class_log)
 
         with gr.Tab("3–4 · Metadata"):
             gr.Markdown(
                 f"""
                 ### Phase 3 – Placeholders
-                Pick the **same embedding model** you used for classification.
+                Same model as classification. Filename updates with the radio.
 
-                - MiniLM → `classification_results_minilm.xlsx`
-                - Qwen3 → `classification_results_qwen3.xlsx`
-
-                Writes JSON under `{PLACEHOLDERS_DIR}`
+                MiniLM → `{PLACEHOLDERS_MINILM_DIR}`  
+                Qwen3 → `{PLACEHOLDERS_QWEN_DIR}`
                 """
             )
             ph_embedder = gr.Radio(
@@ -290,68 +281,45 @@ def build_ui() -> gr.Blocks:
                 value="MiniLM (fast baseline)",
             )
             excel_name = gr.Textbox(
-                label="Classification Excel filename (override if needed)",
+                label="Classification Excel filename (updates with the radio)",
                 value="classification_results_minilm.xlsx",
             )
-            ph_embedder.change(
-                fn=_excel_for_embedder,
-                inputs=ph_embedder,
-                outputs=excel_name,
-            )
+            ph_embedder.change(fn=_excel_for_embedder, inputs=ph_embedder, outputs=excel_name)
             btn_ph = gr.Button("▶ Create Placeholders", variant="primary")
             ph_log = gr.Textbox(label="Log (Placeholders)", lines=12, max_lines=25, elem_classes=["log-box"])
-            btn_ph.click(
-                fn=ui_run_placeholders,
-                inputs=[ph_embedder, excel_name],
-                outputs=ph_log,
-            )
+            btn_ph.click(fn=ui_run_placeholders, inputs=[ph_embedder, excel_name], outputs=ph_log)
 
             gr.Markdown("---")
             gr.Markdown(
                 f"""
                 ### Phase 4 – Metadata Injector
-                **Prerequisite:** placeholder JSON files in `{PLACEHOLDERS_DIR}`.
+                Uses the **same radio** as Phase 3.
 
-                Creates clones under `{INJECTED_METADATA_DIR}` and writes metadata
-                into native Office properties when possible, otherwise a side-car JSON.
+                MiniLM clones → `{INJECTED_MINILM_DIR}`  
+                Qwen3 clones → `{INJECTED_QWEN_DIR}`
                 """
             )
             btn_inj = gr.Button("▶ Run Metadata Injector", variant="primary")
             inj_log = gr.Textbox(label="Log (Injector)", lines=12, max_lines=25, elem_classes=["log-box"])
-            btn_inj.click(
-                fn=ui_run_injector,
-                inputs=ph_embedder,
-                outputs=inj_log,
-            )
+            btn_inj.click(fn=ui_run_injector, inputs=ph_embedder, outputs=inj_log)
 
-        gr.Markdown(
-            """
-            **Stop:** ends the current phase only. Files already written are **kept** (no undo).
-            """
-        )
+        gr.Markdown("**Stop:** ends the current phase only. Files already written are kept.")
         with gr.Row():
             btn_stop = gr.Button("⏹ Stop current job", variant="stop")
-            stop_log = gr.Textbox(
-                label="Stop status",
-                lines=2,
-                max_lines=4,
-                elem_classes=["log-box"],
-            )
+            stop_log = gr.Textbox(label="Stop status", lines=2, max_lines=4, elem_classes=["log-box"])
         btn_stop.click(fn=ui_stop, inputs=None, outputs=stop_log)
 
         with gr.Tab("Help"):
             gr.Markdown(
                 """
                 ## Runbook
+                1. Dedup → review Excel → dry-run → delete
+                2. Ingestion
+                3. Classification (MiniLM or Qwen3)
+                4. Placeholders (same model)
+                5. Injector (same model)
 
-                1. **0 · Deduplication** → review Excel → dry-run → confirmed delete
-                2. **1 · Ingestion** → extracted texts
-                3. **2 · Classification** → MiniLM or Qwen3 (separate Excel files)
-                4. **3 · Placeholders** → pick the same model / Excel
-                5. **4 · Injector** → clones + metadata
-
-                Change paths only in `project_config.py`, then restart.
-                `Litigation_hold` remains a classification column (default No).
+                Paths only change in `project_config.py`, then restart.
                 """
             )
 
