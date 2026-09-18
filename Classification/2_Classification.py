@@ -161,6 +161,13 @@ def run_classification(embedder_key: str = "minilm") -> None:
                 chunk_chars=cfg["chunk_chars"],
             )
 
+            from Classification.archival_rules import archival_value_for
+            row["Archival_value"] = archival_value_for(
+                row.get("Function_EN", ""),
+                row.get("Sub-Function_EN", ""),
+                row.get("Business_Process_EN", ""),
+            )
+
             if title:
                 row["Title | Titre"] = title
 

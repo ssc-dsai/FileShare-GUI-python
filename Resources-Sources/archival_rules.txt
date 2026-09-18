@@ -1,0 +1,8 @@
+# Archival_value = Yes when the assigned FCP path matches a rule.
+# One rule per line.
+# Format: Function_EN | Sub-Function_EN | Business_Process_EN
+# Use * in a column to mean "any value at that level".
+# Lines starting with # are comments.
+
+Management and Oversight | Project Management | *
+Management and Oversight | Planning and Reporting | *

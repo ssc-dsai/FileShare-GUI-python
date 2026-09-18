@@ -3,24 +3,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
+from pathlib import Path
+
 import pandas as pd
 
 from project_config import CLASSIFICATION_RESULTS_DIR, HIERARCHY_CSV
 
-_ILLEGAL_XML = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
-
-
-def _sanitize_for_excel(df: pd.DataFrame) -> pd.DataFrame:
-    """Strip characters OpenPyXL rejects. Do not filter on dtype==object
-    (pandas may use dtype 'str', which skipped the FCP descriptions)."""
-    out = df.copy()
-    for col in out.columns:
-        out[col] = out[col].map(
-            lambda v: _ILLEGAL_XML.sub("", v) if isinstance(v, str) else v
-        )
-    return out
+from Classification.archival_rules import archival_value_for
 
 UNKNOWN = "Unknown"
 
@@ -54,6 +44,17 @@ REPORTS = {
     "qwen3": CLASSIFICATION_RESULTS_DIR / "classification_results_qwen3.xlsx",
 }
 
+_ILLEGAL_XML = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
+
+
+def _sanitize_for_excel(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    for col in out.columns:
+        out[col] = out[col].map(
+            lambda v: _ILLEGAL_XML.sub("", v) if isinstance(v, str) else v
+        )
+    return out
+
 
 def report_path(embedder_key: str) -> Path:
     key = "qwen3" if "qwen" in (embedder_key or "").lower() else "minilm"
@@ -64,10 +65,11 @@ def load_fcp() -> pd.DataFrame:
     if not HIERARCHY_CSV.exists():
         raise FileNotFoundError(f"FCP hierarchy not found: {HIERARCHY_CSV}")
     df = pd.read_csv(HIERARCHY_CSV, encoding="utf-8-sig", low_memory=False)
-    for col in df.select_dtypes(include="object").columns:
-        df[col] = df[col].fillna("").astype(str).str.strip()
+    for col in df.columns:
+        if df[col].dtype == object or str(df[col].dtype) in {"string", "str"}:
+            df[col] = df[col].fillna("").astype(str).str.strip()
     if "Function_EN" in df.columns:
-        df = df[df["Function_EN"].str.len() > 0].reset_index(drop=True)
+        df = df[df["Function_EN"].astype(str).str.len() > 0].reset_index(drop=True)
     return df
 
 
@@ -115,7 +117,7 @@ def load_report(embedder_key: str) -> pd.DataFrame:
     path = report_path(embedder_key)
     if not path.is_file():
         raise FileNotFoundError(f"Classification report not found: {path}")
-    return pd.read_excel(path)
+    return pd.read_excel(path, sheet_name=0)
 
 
 def document_choices(df: pd.DataFrame) -> list[str]:
@@ -189,6 +191,7 @@ def apply_override(
     text_cols = list(FILL_COLS) + list(CLEAR_COLS) + [
         "needs_review",
         "confidence_category",
+        "Archival_value",
     ]
     for col in text_cols:
         if col not in df.columns:
@@ -197,6 +200,12 @@ def apply_override(
 
     if "overall_confidence" in df.columns:
         df["overall_confidence"] = pd.to_numeric(df["overall_confidence"], errors="coerce")
+
+    archival = archival_value_for(
+        payload.get("Function_EN", ""),
+        payload.get("Sub-Function_EN", ""),
+        payload.get("Business_Process_EN", ""),
+    )
 
     for idx in matches:
         for col in FILL_COLS:
@@ -209,6 +218,7 @@ def apply_override(
             df.at[idx, "confidence_category"] = "Human"
         if "overall_confidence" in df.columns:
             df.at[idx, "overall_confidence"] = pd.NA
+        df.at[idx, "Archival_value"] = archival
 
     extra = {}
     if path.exists():
@@ -217,21 +227,10 @@ def apply_override(
         except Exception:
             extra = {}
 
-    def _sanitize(frame: pd.DataFrame) -> pd.DataFrame:
-        import re
-        illegal = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
-        out = frame.copy()
-        for col in out.columns:
-            if out[col].dtype == object:
-                out[col] = out[col].map(
-                    lambda v: illegal.sub("", v) if isinstance(v, str) else v
-                )
-        return out
-
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
-        _sanitize(df).to_excel(writer, sheet_name="classification", index=False)
+        _sanitize_for_excel(df).to_excel(writer, sheet_name="classification", index=False)
         fcp_sheet = extra.get("FCP_Hierarchy", fcp)
-        _sanitize(fcp_sheet).to_excel(writer, sheet_name="FCP_Hierarchy", index=False)
+        _sanitize_for_excel(fcp_sheet).to_excel(writer, sheet_name="FCP_Hierarchy", index=False)
 
     return (
         f"✅ Updated {filename} in {path.name}\n"
@@ -239,5 +238,6 @@ def apply_override(
         f"Sub-Function: {payload.get('Sub-Function_EN')}\n"
         f"Business Process: {payload.get('Business_Process_EN')}\n"
         f"Class No: {payload.get('Full_File_Class_No')}\n"
+        f"Archival_value: {archival}\n"
         "Excerpt columns cleared."
     )
