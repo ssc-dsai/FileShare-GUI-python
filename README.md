@@ -1,23 +1,35 @@
 ```markdown
 # FileShare-GUI
 
-Local Gradio application for **document deduplication, text extraction, semantic classification (FCP hierarchy) and metadata injection**.
+Local Gradio app for **deduplication, text extraction, FCP classification, human review, and metadata injection**.
 
-Designed to run **entirely on a single Windows workstation** (or similar), with **no required cloud services** at runtime. Hugging Face is used **only once** to download embedding and vision models to disk; after that the pipeline can run **offline**.
+It runs on a **single Windows workstation**. After the Hugging Face models are saved on disk, the pipeline can run **offline**. No Ollama and no cloud OCR.
 
 ---
 
-## What this application does
+## What it does
 
-| Phase | Name | Purpose |
-|-------|------|---------|
-| 0 | **Deduplication** | Scan source documents for exact/near-duplicates and trivial content; produce an Excel review workbook; optional controlled delete |
-| 1 | **Ingestion** | Extract text from PDF / Word / PowerPoint / images / text; export images for vision under `extracted_texts/_images` |
-| 2 | **Classification** | Match document text to the FCP hierarchy (`fcp_CSV-UTF.csv`) using a local MiniLM embedding model; bilingual match excerpts; optional multi-image descriptions via local Qwen2-VL; enrich document type & sensitivity |
-| 3 | **Placeholders** | Build JSON side-cars from `classification_results.xlsx` (including user edits to litigation/archival flags) |
-| 4 | **Metadata injector** | Clone originals and inject metadata (native Office properties when possible; always JSON side-car) |
+| Phase | Tab | Purpose |
+|-------|-----|---------|
+| 0 | Deduplication | Exact / near-duplicate scan, Excel review, optional dry-run then delete |
+| 1 | Ingestion | Extract text from Office / PDF / images / txt; export vision images under `extracted_texts/_images` |
+| 2 | Classification | Match text to `fcp_CSV-UTF.csv` with **one** local embedder (MiniLM or Qwen3-Embedding-0.6B). Optional image captions via local Qwen2-VL |
+| 2b | Review / override | Human picks Function → Sub-Function → Business Process from the FCP list. Official bilingual fields are written back into the **same** MiniLM or Qwen3 workbook. Excerpt columns are cleared |
+| 3 | Placeholders | JSON side-cars from that workbook, including Litigation_hold / Archival_value / critical_business_content |
+| 4 | Injector | Clone originals into a **per-model** folder; native Office properties when possible; always a JSON side-car |
 
-A **Gradio** web UI orchestrates all phases (Dashboard, Configuration view, Stop control, per-phase logs).
+The Gradio UI also has a Dashboard, a read-only Configuration view, and a Stop button (stop does not undo files already written).
+
+---
+
+## Two embedding models
+
+| Choice | Report | Placeholders / clones |
+|--------|--------|------------------------|
+| MiniLM (fast) | `classification_results_minilm.xlsx` | `Injected_Metadata\minilm\` |
+| Qwen3-Embedding-0.6B | `classification_results_qwen3.xlsx` | `Injected_Metadata\qwen3\` |
+
+Only **one** embedder is loaded at a time. Caches live under `classification_results\embedding_cache\minilm\` and `...\qwen3_0.6b\`. Do not mix those folders.
 
 ---
 
@@ -68,8 +80,8 @@ FileShare-GUI/
 1. Open the GitHub repo: `https://github.com/ssc-dsai/FileShare-GUI-python`  
 2. **Code → Download ZIP**  
 3. Extract to a **user-writable** folder, e.g.  
-   `C:\Users\<you>\Apps\FileShare-GUI`  
-   Do **not** install under `Program Files`.
+   `C:\FileShare-GUI`  
+   Do **not** copy under `Program Files`.
 
 ### Option B — Git clone
 
@@ -105,6 +117,14 @@ python -m pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 python -m spacy download fr_core_news_sm
 ```
+### Option B — if admin rights prevent you to downloading spaCy
+```bash
+Navigate to: https://spacy.io/models/en#en_core_web_sm
+- Click on the Download Link and download to to your machine
+Navigate to: https://spacy.io/models/fr#fr_core_news_sm
+- Click on the Download Link and download to to your machine
+Move both "en_core_web_sm-3.8.0-py3-none-any.whl" and "fr_core_news_sm-3.8.0-py3-none-any.whl" from the downloads folder to C:\FileShare-GUI
+```
 
 ### Windows only (native Office injection)
 
@@ -123,7 +143,7 @@ Runtime is offline; **first-time download requires internet**.
 Create a models root (example):
 
 ```text
-C:\FileShareData\models
+C:\FileShare-GUI\models
 ```
 
 ### Embedding model (required for classification vectors)
@@ -131,7 +151,9 @@ C:\FileShareData\models
 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
 
 ```bash
-python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; local_dir = Path(r'C:\FileShareData\models\paraphrase-multilingual-MiniLM-L12-v2'); local_dir.mkdir(parents=True, exist_ok=True); print('Downloading to', local_dir); model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); model.save(str(local_dir)); print('Done')"
+python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; d=Path(r'C:\FileShare-GUI\models\paraphrase-multilingual-MiniLM-L12-v2'); d.mkdir(parents=True, exist_ok=True); m=SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); m.save(str(d)); print('Done', d)"
+python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; d=Path(r'C:\FileShare-GUI\models\Qwen2-VL-2B-Instruct'); d.mkdir(parents=True, exist_ok=True); m=SentenceTransformer('sentence-transformers/Qwen2-VL-2B-Instruct'); m.save(str(d)); print('Done', d)"
+python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; d=Path(r'C:\FileShare-GUI\models\Qwen3-Embeddings-0.6B'); d.mkdir(parents=True, exist_ok=True); m=SentenceTransformer('sentence-transformers/Qwen3-Embeddings-0.6B'); m.save(str(d)); print('Done', d)"
 ```
 
 ### Vision model (required for image-flagged documents)
@@ -141,12 +163,12 @@ python -c "from sentence_transformers import SentenceTransformer; from pathlib i
 Download with the same approach you used in development (Hugging Face `snapshot_download` / transformers save into):
 
 ```text
-C:\FileShareData\models\Qwen2-VL-2B-Instruct
+C:\FileShare-GUI\models\Qwen2-VL-2B-Instruct
 ```
 
 Point `project_config.py` at these folders (see below).
 
-After download, you can set offline-friendly environment variables when starting the app (optional):
+After download, by default the offline-friendly environment variables are preset when starting the app:
 
 ```text
 HF_HUB_OFFLINE=1
@@ -186,7 +208,7 @@ Ensure `Resources-Sources` files ship with the repo (FCP CSV, `Doc_Type_Dictiona
 ```bash
 cd <project-root>
 .venv\Scripts\activate
-python app.py
+py app.py
 ```
 
 Open a browser:
@@ -202,15 +224,12 @@ http://127.0.0.1:7860
 
 ## 6. Typical end-to-end workflow
 
-1. Place documents [Classification](Classification)under `SOURCE_DOCS_DIR`.  
-2. **Deduplication** → review Excel → optional delete (prefer dry-run first).  
-3. **Ingestion** → `.txt` under extracted texts; images under `extracted_texts/_images`.  
-4. **Classification** → `classification_results.xlsx`.  
-5. Optional: edit Excel (`Litigation_hold`, `Archival_value`, `critical_business_content`, etc.).  
-6. **Placeholders** → JSON side-cars (re-run after Excel edits).  
-7. **Metadata injector** → clones + metadata.
-
-**Fixed classification metadata (not from FCP):**
+1. **Deduplication** analysis → open Excel in DEDUPS_DIR → mark User_Confirmed_Delete → dry-run → uncheck dry-run to delete.
+2. **Ingestion** extracts text and images for further processing
+3. **Classification** (pick MiniLM or Qwen3). Close the result workbook in Excel first.
+4. **Review / override** for rows the model got wrong.
+5. **Placeholders** create the metadata labels and space within the document properties
+6. **Metadata injector** with the same radio.
 
 - Disposition Authorization: `2021/005`  
 - Technical Environment: `Microsoft's Distributed File System (DFS)`
@@ -248,12 +267,6 @@ Data folders and model directories should live **outside** the code tree when po
 | No `_images` for PDFs | Document may have no embedded rasters; standalone PNG/JPG are copied under `_images` when configured |
 | Word inject fails | Office COM policy; side-car JSON still written |
 | Hugging Face network calls | Models path wrong; set offline env vars; verify local folders |
-
----
-
-## 10. License / ownership
-
-Internal use under **ssc-dsai**. Adjust license and contact as required by your organization.
 
 ---
 
@@ -299,13 +312,22 @@ Paths are set only in project_config.py. Change paths there, save, then restart 
 ### Deduplication
 ![Deduplication](docs/images/3_DeDuplication.png)
 
+### Deduplication Dry-Run and Deletion
+![Deduplication](docs/images/3_DeDuplication2.png)
+
 ### Ingestion of Raw Text from Documents
 ![Ingestion](docs/images/4_Ingestion.png)
 
 ### Classification
 ![Classification](docs/images/5_Classification.png)
 
+### Review and Override
+![Classification](docs/images/5_Classification2.png)
+
 ### Metadata Placeholder and Injection
 ![Metadata](docs/images/6_Metadata.png)
+
+### Metadata Placeholder and Injection
+![Metadata](docs/images/6_Metadata2.png)
 
 ```
