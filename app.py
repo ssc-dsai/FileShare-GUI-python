@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import gradio as gr
+import pandas as pd
 
 from backend.runners import (
     run_classification,
@@ -38,7 +39,35 @@ from project_config import (
     PLACEHOLDERS_QWEN_DIR,
     SOURCE_DOCS_DIR,
     VISION_MODEL_PATH,
+    HIERARCHY_CSV,
 )
+
+from Classification.hitl_review import (
+    apply_override,
+    current_assignment,
+    document_choices,
+    function_choices,
+    load_fcp,
+    load_report,
+    process_choices,
+    subfunction_choices,
+)
+
+import re
+
+_ILLEGAL_XML = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
+
+
+def _sanitize_for_excel(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    for col in out.columns:
+        if out[col].dtype == object:
+            out[col] = (
+                out[col]
+                .astype(str)
+                .map(lambda v: _ILLEGAL_XML.sub("", v) if v not in ("nan", "None") else v)
+            )
+    return out
 
 try:
     from backend.status import status_markdown as _status_markdown
@@ -135,6 +164,83 @@ def ui_stop() -> str:
     ok, log, _ = run_stop()
     return log
 
+def _hitl_key(choice: str) -> str:
+    return "qwen3" if "qwen" in (choice or "").lower() else "minilm"
+
+
+def ui_hitl_load(embedder_choice: str):
+    key = _hitl_key(embedder_choice)
+    try:
+        fcp = load_fcp()
+        df = load_report(key)
+    except Exception as e:
+        empty = gr.update(choices=[], value=None)
+        return empty, empty, empty, empty, f"❌ {e}"
+
+    docs = document_choices(df)
+    funcs = function_choices(fcp)
+    first = docs[0] if docs else None
+    cur = current_assignment(df, first) if first else {}
+    fn = cur.get("Function_EN") or "Unknown"
+    subs = subfunction_choices(fcp, fn)
+    sub = cur.get("Sub-Function_EN") if cur.get("Sub-Function_EN") in subs else (subs[0] if subs else "Unknown")
+    procs = process_choices(fcp, fn, sub)
+    proc = cur.get("Business_Process_EN") if cur.get("Business_Process_EN") in procs else (procs[0] if procs else "Unknown")
+    msg = f"Loaded {len(docs)} rows from classification_results_{key}.xlsx"
+    return (
+        gr.update(choices=docs, value=first),
+        gr.update(choices=funcs, value=fn if fn in funcs else "Unknown"),
+        gr.update(choices=subs, value=sub),
+        gr.update(choices=procs, value=proc),
+        msg,
+    )
+
+
+def ui_hitl_pick_doc(embedder_choice: str, filename: str):
+    key = _hitl_key(embedder_choice)
+    try:
+        fcp = load_fcp()
+        df = load_report(key)
+        cur = current_assignment(df, filename)
+    except Exception as e:
+        return gr.update(), gr.update(), gr.update(), f"❌ {e}"
+    fn = cur.get("Function_EN") or "Unknown"
+    funcs = function_choices(fcp)
+    subs = subfunction_choices(fcp, fn)
+    sub = cur.get("Sub-Function_EN") if cur.get("Sub-Function_EN") in subs else (subs[0] if subs else "Unknown")
+    procs = process_choices(fcp, fn, sub)
+    proc = cur.get("Business_Process_EN") if cur.get("Business_Process_EN") in procs else (procs[0] if procs else "Unknown")
+    return (
+        gr.update(choices=funcs, value=fn if fn in funcs else "Unknown"),
+        gr.update(choices=subs, value=sub),
+        gr.update(choices=procs, value=proc),
+        f"{filename} | class {cur.get('Full_File_Class_No', '')}",
+    )
+
+
+def ui_hitl_function(function_en: str):
+    fcp = load_fcp()
+    subs = subfunction_choices(fcp, function_en)
+    sub = subs[1] if len(subs) > 1 else subs[0]
+    procs = process_choices(fcp, function_en, sub)
+    proc = procs[1] if len(procs) > 1 else procs[0]
+    return gr.update(choices=subs, value=sub), gr.update(choices=procs, value=proc)
+
+
+def ui_hitl_subfunction(function_en: str, sub_en: str):
+    fcp = load_fcp()
+    procs = process_choices(fcp, function_en, sub_en)
+    proc = procs[1] if len(procs) > 1 else procs[0]
+    return gr.update(choices=procs, value=proc)
+
+
+def ui_hitl_apply(embedder_choice, filename, function_en, sub_en, process_en):
+    if not filename:
+        return "❌ Load a report and pick a document first."
+    try:
+        return apply_override(_hitl_key(embedder_choice), filename, function_en, sub_en, process_en)
+    except Exception as e:
+        return f"❌ {type(e).__name__}: {e}"
 
 def build_ui() -> gr.Blocks:
     with gr.Blocks(title="FileShare CleanUp") as demo:
@@ -261,6 +367,59 @@ def build_ui() -> gr.Blocks:
             btn_class = gr.Button("▶ Run Classification", variant="primary")
             class_log = gr.Textbox(label="Log output", lines=20, max_lines=40, elem_classes=["log-box"])
             btn_class.click(fn=ui_run_classification, inputs=embedder_radio, outputs=class_log)
+
+        with gr.Tab("2b · Review / override"):
+            gr.Markdown(
+                """
+                ### Human review
+                Load the MiniLM or Qwen3 report. Pick a document.
+                Choose **Function (EN)** → **Sub-Function (EN)** → **Business Process (EN)**.
+                Apply writes official FCP fields (including French) into that same workbook
+                and clears the six excerpt columns.
+                """
+            )
+            hitl_model = gr.Radio(
+                label="Which report?",
+                choices=[
+                    "MiniLM (fast baseline)",
+                    "Qwen3-Embedding-0.6B (stronger, GPU)",
+                ],
+                value="MiniLM (fast baseline)",
+            )
+            btn_hitl_load = gr.Button("▶ Load report", variant="secondary")
+            hitl_doc = gr.Dropdown(label="Document (filename)", choices=[], interactive=True)
+            hitl_fn = gr.Dropdown(label="Function_EN", choices=["Unknown"], value="Unknown")
+            hitl_sub = gr.Dropdown(label="Sub-Function_EN", choices=["Unknown"], value="Unknown")
+            hitl_proc = gr.Dropdown(label="Business_Process_EN", choices=["Unknown"], value="Unknown")
+            btn_hitl_apply = gr.Button("▶ Apply FCP values to this row", variant="primary")
+            hitl_log = gr.Textbox(label="Review log", lines=8, elem_classes=["log-box"])
+
+            btn_hitl_load.click(
+                fn=ui_hitl_load,
+                inputs=hitl_model,
+                outputs=[hitl_doc, hitl_fn, hitl_sub, hitl_proc, hitl_log],
+            )
+            hitl_doc.change(
+                fn=ui_hitl_pick_doc,
+                inputs=[hitl_model, hitl_doc],
+                outputs=[hitl_fn, hitl_sub, hitl_proc, hitl_log],
+            )
+            hitl_fn.change(
+                fn=ui_hitl_function,
+                inputs=hitl_fn,
+                outputs=[hitl_sub, hitl_proc],
+            )
+            hitl_sub.change(
+                fn=ui_hitl_subfunction,
+                inputs=[hitl_fn, hitl_sub],
+                outputs=hitl_proc,
+            )
+            btn_hitl_apply.click(
+                fn=ui_hitl_apply,
+                inputs=[hitl_model, hitl_doc, hitl_fn, hitl_sub, hitl_proc],
+                outputs=hitl_log,
+            )
+
 
         with gr.Tab("3–4 · Metadata"):
             gr.Markdown(

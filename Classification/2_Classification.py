@@ -1,7 +1,6 @@
 # Classification/2_Classification.py
 # Phase 2 – Classification
 #
-#   python Classification/2_Classification.py
 #   python Classification/2_Classification.py --embedder minilm
 #   python Classification/2_Classification.py --embedder qwen3
 
@@ -9,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -22,13 +22,14 @@ if str(PROJECT_ROOT) not in sys.path:
 from project_config import (
     CLASSIFICATION_RESULTS_DIR,
     EXTRACTED_TEXTS_DIR,
+    HIERARCHY_CSV,
     QWEN_DOC_INSTRUCTION,
     SOURCE_DOCS_DIR,
     VISION_MODEL_PATH,
     resolve_embedder,
 )
 
-from Classification.config_classification import COLUMNS_ORDER, HIERARCHY_CSV
+from Classification.config_classification import COLUMNS_ORDER
 from Classification.hierarchy_loader import load_or_build_hierarchy_index
 from Classification.classification_core import classify_document
 from Classification.vision_helper import build_vision_augmented_text
@@ -53,6 +54,19 @@ ORIGINAL_EXTS = [
     ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".gif", ".webp", ".bmp",
     ".xlsx", ".xls", ".txt",
 ]
+
+_ILLEGAL_XML = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
+
+
+def _sanitize_for_excel(df: pd.DataFrame) -> pd.DataFrame:
+    """Strip characters OpenPyXL rejects. Do not filter on dtype==object
+    (pandas may use dtype 'str', which skipped the FCP descriptions)."""
+    out = df.copy()
+    for col in out.columns:
+        out[col] = out[col].map(
+            lambda v: _ILLEGAL_XML.sub("", v) if isinstance(v, str) else v
+        )
+    return out
 
 
 def find_original_file(stem: str) -> Path | None:
@@ -96,8 +110,7 @@ def run_classification(embedder_key: str = "minilm") -> None:
 
     if not model_path.exists():
         raise FileNotFoundError(
-            f"Embedding model not found: {model_path}\n"
-            f"Download it first, then retry."
+            f"Embedding model not found: {model_path}\nDownload it first, then retry."
         )
 
     logger.info(f"Loading embedder from {model_path} (this model only)...")
@@ -197,8 +210,20 @@ def run_classification(embedder_key: str = "minilm") -> None:
     )
     csv_path = CLASSIFICATION_RESULTS_DIR / f"{stem}.csv"
     xlsx_path = CLASSIFICATION_RESULTS_DIR / f"{stem}.xlsx"
+
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
-    df.to_excel(xlsx_path, index=False, engine="openpyxl")
+
+    try:
+        fcp_df = pd.read_csv(HIERARCHY_CSV, encoding="utf-8-sig", low_memory=False)
+        fcp_df = _sanitize_for_excel(fcp_df)
+    except Exception as e:
+        logger.warning(f"Could not attach FCP sheet: {e}")
+        fcp_df = None
+
+    with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
+        _sanitize_for_excel(df).to_excel(writer, sheet_name="classification", index=False)
+        if fcp_df is not None:
+            fcp_df.to_excel(writer, sheet_name="FCP_Hierarchy", index=False)
 
     logger.info(f"CSV saved: {csv_path}")
     logger.info(f"Excel saved: {xlsx_path}")
