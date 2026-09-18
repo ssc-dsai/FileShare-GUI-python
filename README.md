@@ -155,6 +155,16 @@ python -c "from sentence_transformers import SentenceTransformer; from pathlib i
 python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; d=Path(r'C:\FileShare-GUI\models\Qwen2-VL-2B-Instruct'); d.mkdir(parents=True, exist_ok=True); m=SentenceTransformer('sentence-transformers/Qwen2-VL-2B-Instruct'); m.save(str(d)); print('Done', d)"
 python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; d=Path(r'C:\FileShare-GUI\models\Qwen3-Embeddings-0.6B'); d.mkdir(parents=True, exist_ok=True); m=SentenceTransformer('sentence-transformers/Qwen3-Embeddings-0.6B'); m.save(str(d)); print('Done', d)"
 ```
+### Option B — if admin rights prevent you to downloading HuggingFace models
+```bash
+From the Command Line, type the following once your in th project directory
+
+cd C:\FileShare-GUI\models
+
+git -c http.sslVerify=false clone https://huggingface.co/Qwen/Qwen2-VL-2B-Instruct
+git -c http.sslVerify=false clone https://huggingface.co/sentence-transformers/paraphrase-MiniLM-L12-v2
+git -c http.sslVerify=false clone https://huggingface.co/Qwen/Qwen3-Embedding-0.6B
+```
 
 ### Vision model (required for image-flagged documents)
 
