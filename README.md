@@ -282,7 +282,7 @@ Data folders and model directories should live **outside** the code tree when po
 
 ## Configure paths (required)
 
-Before the first run, open **`project_config.py`** and set every absolute
+Before the first run, open **project_config.py** and set every absolute
 path for this machine (source documents, extracted texts, results and models.
 Save the file and restart the app after any change.
 
