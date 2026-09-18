@@ -99,19 +99,30 @@ def ui_run_classification(embedder_choice: str) -> str:
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
 
 
-def ui_run_placeholders(excel_name: str) -> str:
-    ok, log, _ = run_placeholder_creator(
-        excel_name.strip() or "classification_results_minilm.xlsx"
-    )
+def _excel_for_embedder(choice: str) -> str:
+    if "qwen" in (choice or "").lower():
+        return "classification_results_qwen3.xlsx"
+    return "classification_results_minilm.xlsx"
+
+
+def _embedder_key(choice: str) -> str:
+    return "qwen3" if "qwen" in (choice or "").lower() else "minilm"
+
+
+def ui_run_placeholders(embedder_choice: str, excel_name: str) -> str:
+    key = _embedder_key(embedder_choice)
+    name = (excel_name or "").strip() or _excel_for_embedder(embedder_choice)
+    ok, log, _ = run_placeholder_creator(name, embedder_key=key)
     header = "✅ Placeholders created" if ok else "❌ Placeholder creation failed"
-    extra = f"\n\nFolder: `{PLACEHOLDERS_DIR}`"
+    extra = f"\n\nExcel: `{name}`\nFolder: `{INJECTED_METADATA_DIR / key / 'placeholders'}`"
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
 
 
-def ui_run_injector() -> str:
-    ok, log, _ = run_metadata_injector()
+def ui_run_injector(embedder_choice: str) -> str:
+    key = _embedder_key(embedder_choice)
+    ok, log, _ = run_metadata_injector(embedder_key=key)
     header = "✅ Metadata injection finished" if ok else "❌ Metadata injection failed"
-    extra = f"\n\nOutput: `{INJECTED_METADATA_DIR}`"
+    extra = f"\n\nOutput: `{INJECTED_METADATA_DIR / key}`"
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
 
 
@@ -235,7 +246,6 @@ def build_ui() -> gr.Blocks:
                 **Prerequisite:** extracted `.txt` files in `{EXTRACTED_TEXTS_DIR}`
 
                 Choose **one** embedding model. Only that model is loaded.
-                Caches: `embedding_cache/minilm` vs `embedding_cache/qwen3_0.6b`.
                 Reports:
                 - MiniLM → `classification_results_minilm.xlsx`
                 - Qwen3 → `classification_results_qwen3.xlsx`
@@ -263,30 +273,56 @@ def build_ui() -> gr.Blocks:
             gr.Markdown(
                 f"""
                 ### Phase 3 – Placeholders
-                **Prerequisite:** a classification Excel exists.  
-                Type the file you want (MiniLM or Qwen3).  
+                Pick the **same embedding model** you used for classification.
+
+                - MiniLM → `classification_results_minilm.xlsx`
+                - Qwen3 → `classification_results_qwen3.xlsx`
+
                 Writes JSON under `{PLACEHOLDERS_DIR}`
                 """
             )
+            ph_embedder = gr.Radio(
+                label="Which classification report?",
+                choices=[
+                    "MiniLM (fast baseline)",
+                    "Qwen3-Embedding-0.6B (stronger, GPU)",
+                ],
+                value="MiniLM (fast baseline)",
+            )
             excel_name = gr.Textbox(
-                label="Classification Excel filename",
+                label="Classification Excel filename (override if needed)",
                 value="classification_results_minilm.xlsx",
+            )
+            ph_embedder.change(
+                fn=_excel_for_embedder,
+                inputs=ph_embedder,
+                outputs=excel_name,
             )
             btn_ph = gr.Button("▶ Create Placeholders", variant="primary")
             ph_log = gr.Textbox(label="Log (Placeholders)", lines=12, max_lines=25, elem_classes=["log-box"])
-            btn_ph.click(fn=ui_run_placeholders, inputs=excel_name, outputs=ph_log)
+            btn_ph.click(
+                fn=ui_run_placeholders,
+                inputs=[ph_embedder, excel_name],
+                outputs=ph_log,
+            )
 
             gr.Markdown("---")
             gr.Markdown(
                 f"""
                 ### Phase 4 – Metadata Injector
-                **Prerequisite:** placeholder JSON files.  
-                Clones + optional native Office properties → `{INJECTED_METADATA_DIR}`
+                **Prerequisite:** placeholder JSON files in `{PLACEHOLDERS_DIR}`.
+
+                Creates clones under `{INJECTED_METADATA_DIR}` and writes metadata
+                into native Office properties when possible, otherwise a side-car JSON.
                 """
             )
             btn_inj = gr.Button("▶ Run Metadata Injector", variant="primary")
             inj_log = gr.Textbox(label="Log (Injector)", lines=12, max_lines=25, elem_classes=["log-box"])
-            btn_inj.click(fn=ui_run_injector, outputs=inj_log)
+            btn_inj.click(
+                fn=ui_run_injector,
+                inputs=ph_embedder,
+                outputs=inj_log,
+            )
 
         gr.Markdown(
             """
@@ -308,17 +344,14 @@ def build_ui() -> gr.Blocks:
                 """
                 ## Runbook
 
-                ### Classification pipeline
-                1. **0 · Deduplication** (optional) → review Excel → dry-run → confirmed delete
+                1. **0 · Deduplication** → review Excel → dry-run → confirmed delete
                 2. **1 · Ingestion** → extracted texts
-                3. **2 · Classification** → pick MiniLM or Qwen3 → separate Excel reports
-                4. **3 · Placeholders** → enter the Excel filename you want to use
-                5. **4 · Injector** → clones + native metadata where possible
+                3. **2 · Classification** → MiniLM or Qwen3 (separate Excel files)
+                4. **3 · Placeholders** → pick the same model / Excel
+                5. **4 · Injector** → clones + metadata
 
-                ### Notes
-                - Change paths only via `project_config.py`, then **restart**.
-                - Closing the browser does **not** stop a job already running on the server.
-                - `Litigation_hold` stays on the classification Excel (default No).
+                Change paths only in `project_config.py`, then restart.
+                `Litigation_hold` remains a classification column (default No).
                 """
             )
 

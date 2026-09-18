@@ -139,15 +139,27 @@ def run_classification(embedder_key: str = "minilm") -> Result:
     )
 
 
-def run_placeholder_creator(excel_name: str = "classification_results.xlsx") -> Result:
+def run_placeholder_creator(
+    excel_name: str = "classification_results_minilm.xlsx",
+    embedder_key: str = "minilm",
+) -> Result:
+    key = (embedder_key or "minilm").strip().lower()
+    if key not in ("minilm", "qwen3"):
+        key = "minilm"
     return _capture_sub(
         "Metadata_Placeholder/4_placeholder_creator.py",
-        ["--excel", excel_name],
+        ["--excel", excel_name, "--embedder", key],
     )
 
 
-def run_metadata_injector() -> Result:
-    return _capture_sub("Metadata_Injector/5_metadata_injector.py")
+def run_metadata_injector(embedder_key: str = "minilm") -> Result:
+    key = (embedder_key or "minilm").strip().lower()
+    if key not in ("minilm", "qwen3"):
+        key = "minilm"
+    return _capture_sub(
+        "Metadata_Injector/5_metadata_injector.py",
+        ["--embedder", key],
+    )
 
 
 # Optional: ensure dirs if you still call it from Dashboard

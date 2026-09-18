@@ -1,9 +1,10 @@
 # Metadata_Injector/5_metadata_injector.py
-# Launched from Gradio via backend.runners.run_metadata_injector()
-# Or manually: python Metadata_Injector/5_metadata_injector.py
+#   python Metadata_Injector/5_metadata_injector.py --embedder minilm
+#   python Metadata_Injector/5_metadata_injector.py --embedder qwen3
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import shutil
@@ -16,22 +17,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from project_config import (
-    INJECTED_METADATA_DIR as INJECTED_DIR,
-    PLACEHOLDERS_DIR,
+    INJECTED_METADATA_DIR,
     SOURCE_DOCS_DIR,
+    metadata_dirs_for,
 )
 
-# Optional: native Office properties on Windows
 try:
     import win32com.client as win32
     WIN32COM_AVAILABLE = True
 except ImportError:
     WIN32COM_AVAILABLE = False
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
-LOG_DIR = INJECTED_DIR / "logs"
+LOG_DIR = INJECTED_METADATA_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / f"injector_{datetime.now().strftime('%Y%m%d_%H%M')}.log"
 
@@ -46,7 +43,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("injector")
 
-# Fields written into Word CustomDocumentProperties
 NATIVE_CUSTOM_KEYS = [
     "language_detected",
     "Title | Titre",
@@ -73,11 +69,11 @@ NATIVE_CUSTOM_KEYS = [
     "Archival_value",
     "critical_business_content",
     "needs_review",
+    "embedding_model",
 ]
 
 
 def _resolve_original(metadata: dict, json_file: Path) -> Path | None:
-    """Prefer original_path from JSON; fall back to search under SOURCE_DOCS_DIR."""
     raw = str(metadata.get("original_path", "") or "").strip()
     if raw:
         p = Path(raw)
@@ -98,7 +94,6 @@ def _resolve_original(metadata: dict, json_file: Path) -> Path | None:
 
 
 def _set_custom_property(doc, key: str, value: str) -> None:
-    """Set or add a custom document property on a Word document."""
     value = (value or "")[:255]
     if not value.strip():
         return
@@ -112,7 +107,6 @@ def _set_custom_property(doc, key: str, value: str) -> None:
         doc.CustomDocumentProperties(safe_key).Value = value
     except Exception:
         try:
-            # 4 = string type
             doc.CustomDocumentProperties.Add(safe_key, False, 4, value)
         except Exception:
             pass
@@ -212,11 +206,6 @@ def _inject_excel(target_path: Path, metadata: dict) -> bool:
 
 
 def inject_metadata(original_path: Path, sidecar_path: Path, target_path: Path) -> bool:
-    """
-    1. Copy original → Injected_Metadata
-    2. Try native Office property injection (Word / Excel)
-    3. Always write full JSON side-car next to the clone
-    """
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(original_path, target_path)
@@ -244,7 +233,6 @@ def inject_metadata(original_path: Path, sidecar_path: Path, target_path: Path) 
             except Exception as e:
                 logger.warning(f"Excel injection failed for {target_path.name}: {e}")
 
-        # Always write full side-car beside the clone
         sidecar_copy = target_path.with_name(target_path.name + ".metadata.json")
         shutil.copy2(sidecar_path, sidecar_copy)
         if not native_ok:
@@ -257,23 +245,28 @@ def inject_metadata(original_path: Path, sidecar_path: Path, target_path: Path) 
         return False
 
 
-def run_injector() -> None:
+def run_injector(embedder_key: str = "minilm") -> None:
+    dirs = metadata_dirs_for(embedder_key)
+    placeholders = dirs["placeholders"]
+    injected = dirs["root"]
+
     logger.info("=" * 70)
     logger.info("METADATA INJECTOR STARTED")
-    logger.info(f"Source docs   : {SOURCE_DOCS_DIR}")
-    logger.info(f"Placeholders  : {PLACEHOLDERS_DIR}")
-    logger.info(f"Injected out  : {INJECTED_DIR}")
-    logger.info(f"win32com      : {WIN32COM_AVAILABLE}")
+    logger.info(f"Embedder     : {dirs['key']}")
+    logger.info(f"Source docs  : {SOURCE_DOCS_DIR}")
+    logger.info(f"Placeholders : {placeholders}")
+    logger.info(f"Injected out : {injected}")
+    logger.info(f"win32com     : {WIN32COM_AVAILABLE}")
     logger.info("=" * 70)
 
-    INJECTED_DIR.mkdir(parents=True, exist_ok=True)
+    injected.mkdir(parents=True, exist_ok=True)
 
-    if not PLACEHOLDERS_DIR.exists():
-        logger.error(f"Placeholders folder not found: {PLACEHOLDERS_DIR}")
-        print(f"ERROR: Placeholders not found: {PLACEHOLDERS_DIR}")
+    if not placeholders.exists():
+        logger.error(f"Placeholders folder not found: {placeholders}")
+        print(f"ERROR: Placeholders not found: {placeholders}")
         return
 
-    json_files = sorted(PLACEHOLDERS_DIR.glob("*.metadata.json"))
+    json_files = sorted(placeholders.glob("*.metadata.json"))
     logger.info(f"Found {len(json_files)} placeholder JSON files")
 
     if not json_files:
@@ -297,20 +290,32 @@ def run_injector() -> None:
 
         try:
             relative = original_path.relative_to(SOURCE_DOCS_DIR)
-            target_path = INJECTED_DIR / relative
+            target_path = injected / relative
         except ValueError:
-            target_path = INJECTED_DIR / original_path.name
+            target_path = injected / original_path.name
 
         if inject_metadata(original_path, json_file, target_path):
             success += 1
 
     logger.info(f"Injection finished | {success} / {len(json_files)} processed")
     print("\n" + "=" * 70)
-    print(f"Injector complete | {success} documents")
-    print(f"Output: {INJECTED_DIR}")
+    print(f"Injector complete | {success} documents | embedder={dirs['key']}")
+    print(f"Output: {injected}")
     print(f"Log   : {LOG_FILE}")
     print("=" * 70)
 
 
+def main():
+    parser = argparse.ArgumentParser(description="Clone documents and inject metadata")
+    parser.add_argument(
+        "--embedder",
+        default="minilm",
+        choices=["minilm", "qwen3"],
+        help="Which model folder to read placeholders from and write clones into",
+    )
+    args = parser.parse_args()
+    run_injector(args.embedder)
+
+
 if __name__ == "__main__":
-    run_injector()
+    main()

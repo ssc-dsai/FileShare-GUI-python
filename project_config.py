@@ -42,6 +42,18 @@ INJECTED_METADATA_DIR = Path(os.getenv(
 
 PLACEHOLDERS_DIR = INJECTED_METADATA_DIR / "placeholders"
 
+def metadata_dirs_for(embedder_key: str) -> dict:
+    """Separate placeholder + clone folders per embedding model."""
+    key = (embedder_key or "minilm").strip().lower()
+    if key not in ("minilm", "qwen3"):
+        key = "minilm"
+    root = INJECTED_METADATA_DIR / key
+    return {
+        "key": key,
+        "root": root,
+        "placeholders": root / "placeholders",
+    }
+
 # ──────────────────────────────────────────────────────────────────
 # LOCAL MODELS (fully offline) — load ONLY the selected embedder
 # ──────────────────────────────────────────────────────────────────
