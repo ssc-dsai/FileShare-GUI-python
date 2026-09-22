@@ -6,3 +6,50 @@
 
 Management and Oversight | Project Management | *
 Management and Oversight | Planning and Reporting | *
+Management and Oversight | Managing the President and EVP's meetings | *
+Management and Oversight | Receiving and responding to invitations for the President/EVP to speak at events | *
+Management and Oversight | President's office is liaison between MINO | *
+Management and Oversight | Strategic Planning and Government Relations | Executive Committee Management
+Management and Oversight | Strategic Planning and Government Relations | Administrative Committee Management
+Management and Oversight | Executive Services | DM Committees
+Management and Oversight | Audit | Management of departmental internal audit function
+Management and Oversight | Audit | Audit Committees
+Management and Oversight | Audit | Plan Audit/Review
+Management and Oversight | Audit | Conduct Audit
+Management and Oversight | Audit | Report on Audit
+Management and Oversight | Audit | Manage follow-up
+Management and Oversight | Audit | External audits - respond to audits by Office of the Auditor General
+Management and Oversight | Audit | External audits – Respond to audits by other departments
+Management and Oversight | Evaluation | Management of departmental Evaluation Function
+Management and Oversight | Evaluation | Provide Advice
+Management and Oversight | Evaluation | Plan Evaluation
+Management and Oversight | Evaluation | Conduct Evaluation
+Management and Oversight | Evaluation | Report on Evaluation
+Management and Oversight | Evaluation | Manage follow-up
+Management and Oversight | Policies, Directives, Standards and Guidelines | Plan policy initiatives and draft policy instruments
+Management and Oversight | Strategic Planning and Government Relations | The negotiation and signing of agreements that relate directly to SSC’s operational mandate
+Management and Oversight | Strategic Planning and Government Relations | Strategic planning
+Management and Oversight | Strategic Planning and Government Relations | Develop departmental communications plans
+Communications | Public Enquiries | *
+Communications | Marketing events (including Fairs and Exhibits) | *
+Communications | Departmental website | Ensure compliance with federal communications policies
+Management and Oversight | Executive Services | Executive participation in conferences, events, travel, and hospitality
+Management and Oversight | Executive Services | Executive correspondence
+Management and Oversight | Executive Services | Executive briefings
+Management and Oversight | Executive Services | Executive Committees
+Management and Oversight | Executive Services | Manage charitable undertakings
+Management and Oversight | Project Management | The management of projects
+Management and Oversight | Policies, Directives, Standards and Guidelines | The development, implementation, and review of strategic policy
+Management and Oversight | Policies, Directives, Standards and Guidelines | The development, implementation, and review of operational policies
+Management and Oversight | Performance Management | The activities of the Performance Measurement and Evaluation Committee (PMEC)
+Legal Services | Legal Advice and Oversight | *
+Legal Services | Preparation of Legal Documents | *
+Legal Services | Litigation Services | Preparation and filing of pleadings, Producing affidavits/documents/evidence, Preparation for and conduct of trial, Examination for discovery, Appeals process
+Legal Services | Legislative Drafting | Development of statutes
+Legal Services | Legislative Drafting | Developing Regulations and other statutory instruments
+Email and Workplace Technologies | * | *
+Cloud | * | *
+Data Centres | * | *
+Telecommunications | * | *
+Networks | * | *
+Security | The management of risks, through the integration and compliance of identified security requirements into end-to-end operations of SSC managed IT infrastructure | *
