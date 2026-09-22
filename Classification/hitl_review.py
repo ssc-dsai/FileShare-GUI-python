@@ -31,12 +31,18 @@ FILL_COLS = [
 ]
 
 CLEAR_COLS = [
-    "Function_Match_Excerpt_EN",
-    "Function_Match_Excerpt_FR",
-    "Sub_Function_Match_Excerpt_EN",
-    "Sub_Function_Match_Excerpt_FR",
-    "Records_Match_Excerpt_EN",
-    "Records_Match_Excerpt_FR",
+    "Function_Doc_Excerpt_EN",
+    "Function_FCP_Excerpt_EN",
+    "Function_Doc_Excerpt_FR",
+    "Function_FCP_Excerpt_FR",
+    "Sub_Function_Doc_Excerpt_EN",
+    "Sub_Function_FCP_Excerpt_EN",
+    "Sub_Function_Doc_Excerpt_FR",
+    "Sub_Function_FCP_Excerpt_FR",
+    "Records_Doc_Excerpt_EN",
+    "Records_FCP_Excerpt_EN",
+    "Records_Doc_Excerpt_FR",
+    "Records_FCP_Excerpt_FR"
 ]
 
 REPORTS = {

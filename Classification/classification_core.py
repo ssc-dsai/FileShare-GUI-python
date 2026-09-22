@@ -73,19 +73,25 @@ def classify_document(
         "Function_FR": "",
         "Function_Desc_Sum_EN": "",
         "Function_Desc_Sum_FR": "",
-        "Function_Match_Excerpt_EN": "",
-        "Function_Match_Excerpt_FR": "",
+        "Function_Doc_Excerpt_EN": "",
+        "Function_FCP_Excerpt_EN": "",
+        "Function_Doc_Excerpt_FR": "",
+        "Function_FCP_Excerpt_FR": "",
         "Sub-Function_EN": "",
         "Sub-Function_FR": "",
         "Sub-Function_Desc_Summ_EN": "",
         "Sub-Function_Desc_Summ_FR": "",
-        "Sub_Function_Match_Excerpt_EN": "",
-        "Sub_Function_Match_Excerpt_FR": "",
+        "Sub_Function_Doc_Excerpt_EN": "",
+        "Sub_Function_FCP_Excerpt_EN": "",
+        "Sub_Function_Doc_Excerpt_FR": "",
+        "Sub_Function_FCP_Excerpt_FR": "",
         "Full_File_Class_No": "",
         "Business_Process_EN": "",
         "Business_Process_FR": "",
-        "Records_Match_Excerpt_EN": "",
-        "Records_Match_Excerpt_FR": "",
+        "Records_Doc_Excerpt_EN": "",
+        "Records_FCP_Excerpt_EN": "",
+        "Records_Doc_Excerpt_FR": "",
+        "Records_FCP_Excerpt_FR": "",
         "Retention Period": "",
         "Retention Trigger": "",
         # Not in FCP — defaults until a real source exists
@@ -131,9 +137,10 @@ def classify_document(
         logger.error(f"{filename}: semantic_match failed: {e}", exc_info=True)
         return _finalize(row)
 
-    for key in list(row.keys()):
-        if key in match and match[key] not in (None, ""):
-            row[key] = _safe(match[key], row.get(key, ""))
+    # Copy every field semantic_match returned (Doc + FCP excerpts included)
+    for key, val in match.items():
+        if val not in (None, ""):
+            row[key] = _safe(val, row.get(key, ""))
 
     conf = float(match.get("overall_confidence") or 0.0)
     row["overall_confidence"] = round(conf, 3)

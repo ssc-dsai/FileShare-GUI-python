@@ -1,22 +1,16 @@
 # Classification/semantic_matcher.py
 """
-MiniLM-based hierarchical semantic matcher with document chunking.
+Hierarchical semantic matcher.
 
-Match Excerpts come from the FCP hierarchy descriptions (fcp_CSV-UTF.csv),
-not from the document. For each matched row we rank the description
-sentences by similarity to the document and keep the top ~500 characters.
-
-Six excerpt columns are always produced (EN + FR):
-  Function_Match_Excerpt_EN / _FR
-  Sub_Function_Match_Excerpt_EN / _FR
-  Records_Match_Excerpt_EN / _FR   (sourced from Business_Process_EN / _FR)
+Classification: chunk the document, score against FCP indexes.
+Doc excerpts: sentences FROM THE DOCUMENT that support the class.
+FCP excerpts: sentences FROM THE CATALOGUE description that look like the document.
 """
 
 from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -24,24 +18,19 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 logger = logging.getLogger(__name__)
 
+EXCERPT_INSTRUCT = (
+    "Identify document sentences that support this records classification."
+)
 
-# ---------------------------------------------------------------------------
-# Chunking (document side – used only for classification scoring)
-# ---------------------------------------------------------------------------
 
 def chunk_text(
     text: str,
-    max_chars: int = 450,      # ~90–110 tokens for MiniLM
-    overlap_chars: int = 100,  # ~20–25 tokens
+    max_chars: int = 450,
+    overlap_chars: int = 100,
 ) -> list[dict]:
-    """
-    Split text into overlapping character windows.
-    Returns list of {"text": str, "start": int, "end": int}.
-    """
-    text = text.strip()
+    text = (text or "").strip()
     if not text:
         return []
-
     if len(text) <= max_chars:
         return [{"text": text, "start": 0, "end": len(text)}]
 
@@ -49,7 +38,6 @@ def chunk_text(
     start = 0
     while start < len(text):
         end = min(start + max_chars, len(text))
-
         if end < len(text):
             window = text[start:end]
             for sep in [". ", "? ", "! ", "\n\n", "\n"]:
@@ -57,59 +45,105 @@ def chunk_text(
                 if pos > max_chars * 0.4:
                     end = start + pos + len(sep)
                     break
-
-        chunk_text_ = text[start:end].strip()
-        if chunk_text_:
-            chunks.append({"text": chunk_text_, "start": start, "end": end})
-
+        piece = text[start:end].strip()
+        if piece:
+            chunks.append({"text": piece, "start": start, "end": end})
         if end >= len(text):
             break
         start = max(start + 1, end - overlap_chars)
-
     return chunks
 
 
-# ---------------------------------------------------------------------------
-# Hierarchy-description excerpt helpers
-# ---------------------------------------------------------------------------
-
-def _split_sentences(text: str) -> list[str]:
-    """Split a hierarchy description into short sentences / clauses."""
+def _split_doc_sentences(text: str) -> list[str]:
     if not text or not str(text).strip():
         return []
-    text = str(text).strip()
-    parts = re.split(r"(?<=[.!?])\s+|\n+", text)
+    cleaned = re.sub(r"\[VISION_FLAG:[^\]]*\]", " ", str(text))
+    cleaned = re.sub(r"\[IMAGE_PATH:[^\]]*\]", " ", cleaned)
+    cleaned = re.sub(r"\[Generated Title\]", " ", cleaned)
+    parts = re.split(r"(?<=[.!?])\s+|\n+", cleaned)
+    out = []
+    for p in parts:
+        s = " ".join(p.split())
+        if len(s) >= 40:
+            out.append(s)
+    return out
+
+
+def _split_fcp_sentences(text: str) -> list[str]:
+    if not text or not str(text).strip():
+        return []
+    parts = re.split(r"(?<=[.!?])\s+|\n+", str(text).strip())
     return [p.strip() for p in parts if len(p.strip()) > 15]
 
 
-def _top_matching_excerpt(
+def _as_query(class_text: str, use_instruction: bool, instruction: str) -> str:
+    q = " ".join(str(class_text or "").split())
+    if use_instruction and q:
+        inst = instruction or EXCERPT_INSTRUCT
+        return f"Instruct: {inst}\nQuery: {q}"
+    return q
+
+
+def document_excerpts_for_class(
+    document_text: str,
+    class_query: str,
+    embedder,
+    max_chars: int = 500,
+    max_sentences: int = 3,
+    min_score: float = 0.18,
+    use_instruction: bool = False,
+    instruction: str = "",
+) -> str:
+    query = _as_query(class_query, use_instruction, instruction)
+    sentences = _split_doc_sentences(document_text)
+    if not query or not sentences or embedder is None:
+        return ""
+
+    q_emb = embedder.encode(
+        [query], normalize_embeddings=True, show_progress_bar=False
+    )
+    s_emb = embedder.encode(
+        sentences,
+        normalize_embeddings=True,
+        show_progress_bar=False,
+        batch_size=32,
+    )
+    scores = cosine_similarity(np.asarray(q_emb), np.asarray(s_emb))[0]
+    ranked = sorted(zip(scores, sentences), key=lambda x: float(x[0]), reverse=True)
+
+    chosen: list[str] = []
+    length = 0
+    for score, sent in ranked:
+        if float(score) < min_score:
+            break
+        if length + len(sent) + 1 > max_chars and chosen:
+            break
+        chosen.append(sent)
+        length += len(sent) + 1
+        if len(chosen) >= max_sentences:
+            break
+    return " ".join(chosen).strip()[:max_chars]
+
+
+def catalogue_excerpt(
     description: str,
     doc_embedding,
     embedder,
     max_chars: int = 500,
 ) -> str:
-    """
-    From a hierarchy description, keep the sentences most similar
-    to the document embedding, up to max_chars.
-    """
-    sentences = _split_sentences(description)
+    sentences = _split_fcp_sentences(description)
+    raw = " ".join(str(description or "").split())
     if not sentences:
-        raw = (description or "").strip()
+        return raw[:max_chars]
+    if embedder is None or doc_embedding is None:
         return raw[:max_chars]
 
     sent_embs = embedder.encode(
-        sentences,
-        normalize_embeddings=True,
-        show_progress_bar=False,
+        sentences, normalize_embeddings=True, show_progress_bar=False
     )
     doc_vec = np.asarray(doc_embedding, dtype=np.float32).reshape(1, -1)
     scores = cosine_similarity(doc_vec, sent_embs)[0]
-
-    ranked = sorted(
-        zip(scores, sentences),
-        key=lambda x: float(x[0]),
-        reverse=True,
-    )
+    ranked = sorted(zip(scores, sentences), key=lambda x: float(x[0]), reverse=True)
 
     chosen: list[str] = []
     length = 0
@@ -118,13 +152,15 @@ def _top_matching_excerpt(
             break
         chosen.append(sent)
         length += len(sent) + 1
-
     return " ".join(chosen).strip()[:max_chars]
 
 
-# ---------------------------------------------------------------------------
-# Main matcher
-# ---------------------------------------------------------------------------
+def _class_query(row: pd.Series, primary: str, fallback: str) -> str:
+    a = str(row.get(primary, "") or "").strip()
+    if len(a) >= 20:
+        return a
+    return str(row.get(fallback, "") or "").strip()
+
 
 def semantic_match(
     text: str,
@@ -149,10 +185,7 @@ def semantic_match(
 
     chunk_texts = [c["text"] for c in chunks]
     if use_instruction and instruction:
-        # Official Qwen pattern: instruction on the query (document), not the FCP rows
-        chunk_texts = [
-            f"Instruct: {instruction}\nQuery: {t}" for t in chunk_texts
-        ]
+        chunk_texts = [f"Instruct: {instruction}\nQuery: {t}" for t in chunk_texts]
 
     chunk_embs = embedder.encode(
         chunk_texts,
@@ -161,16 +194,13 @@ def semantic_match(
         show_progress_bar=False,
     )
     chunk_embs = np.asarray(chunk_embs, dtype=np.float32)
-
-    # Document vector used later to rank hierarchy sentences
     doc_vec = chunk_embs.mean(axis=0)
 
-    # ---- Stage 1: Function ----
     func_index = indexes.get("function")
     if func_index is None or len(func_index) == 0:
         return _fallback_unknown()
 
-    sims = cosine_similarity(chunk_embs, func_index)  # (n_chunks, n_rows)
+    sims = cosine_similarity(chunk_embs, func_index)
     flat_idx = int(np.argmax(sims))
     best_chunk_idx, best_row_idx = np.unravel_index(flat_idx, sims.shape)
     conf = float(sims[best_chunk_idx, best_row_idx])
@@ -181,48 +211,55 @@ def semantic_match(
 
     best_row = hierarchy_df.iloc[int(best_row_idx)]
 
-    # ---- Stage 2: Sub-Function (restricted to same Function_EN) ----
     sub_conf = 0.0
     function_name = best_row.get("Function_EN", "")
-
     sub_mask = hierarchy_df["Function_EN"] == function_name
     sub_candidates = hierarchy_df[sub_mask]
 
     if not sub_candidates.empty and "sub_function" in indexes:
         sub_indices = np.where(sub_mask.values)[0]
         sub_embs = indexes["sub_function"][sub_indices]
-
         sub_sims = cosine_similarity(chunk_embs, sub_embs)
         sub_flat = int(np.argmax(sub_sims))
         sub_chunk_i, sub_local_i = np.unravel_index(sub_flat, sub_sims.shape)
         sub_conf = float(sub_sims[sub_chunk_i, sub_local_i])
-
         if sub_conf >= min_confidence:
-            sub_row_idx = int(sub_indices[sub_local_i])
-            best_row = hierarchy_df.iloc[sub_row_idx]  # refine to best sub-row
+            best_row = hierarchy_df.iloc[int(sub_indices[sub_local_i])]
 
-    # ---- Six Match Excerpts from hierarchy descriptions ----
-    func_excerpt_en = _top_matching_excerpt(
-        best_row.get("Function_Desc_EN", ""), doc_vec, embedder, excerpt_length
+    excerpt_kw = dict(
+        embedder=embedder,
+        max_chars=excerpt_length,
+        use_instruction=use_instruction,
+        instruction=instruction or EXCERPT_INSTRUCT,
     )
-    func_excerpt_fr = _top_matching_excerpt(
-        best_row.get("Function_Desc_FR", ""), doc_vec, embedder, excerpt_length
-    )
-    sub_excerpt_en = _top_matching_excerpt(
-        best_row.get("Sub-Function_Desc_EN", ""), doc_vec, embedder, excerpt_length
-    )
-    sub_excerpt_fr = _top_matching_excerpt(
-        best_row.get("Sub-Function_Desc_FR", ""), doc_vec, embedder, excerpt_length
-    )
-    # Records excerpts intentionally use Business_Process_* columns
-    records_excerpt_en = _top_matching_excerpt(
-        best_row.get("Business_Process_EN", ""), doc_vec, embedder, excerpt_length
-    )
-    records_excerpt_fr = _top_matching_excerpt(
-        best_row.get("Business_Process_FR", ""), doc_vec, embedder, excerpt_length
-    )
+    func_q_en = _class_query(best_row, "Function_Desc_Sum_EN", "Function_Desc_EN")
+    func_q_fr = _class_query(best_row, "Function_Desc_Sum_FR", "Function_Desc_FR")
+    sub_q_en = _class_query(best_row, "Sub-Function_Desc_Summ_EN", "Sub-Function_Desc_EN")
+    sub_q_fr = _class_query(best_row, "Sub-Function_Desc_Summ_FR", "Sub-Function_Desc_FR")
+    rec_q_en = " ".join(
+        x
+        for x in (
+            str(best_row.get("Business_Process_EN", "") or ""),
+            str(best_row.get("Records", "") or ""),
+        )
+        if x
+    ).strip()
+    rec_q_fr = str(best_row.get("Business_Process_FR", "") or "").strip()
 
-    # ---- Assemble result ----
+    func_doc_en = document_excerpts_for_class(text, func_q_en, **excerpt_kw)
+    func_doc_fr = document_excerpts_for_class(text, func_q_fr, **excerpt_kw)
+    sub_doc_en = document_excerpts_for_class(text, sub_q_en, **excerpt_kw)
+    sub_doc_fr = document_excerpts_for_class(text, sub_q_fr, **excerpt_kw)
+    rec_doc_en = document_excerpts_for_class(text, rec_q_en, **excerpt_kw)
+    rec_doc_fr = document_excerpts_for_class(text, rec_q_fr, **excerpt_kw)
+
+    func_fcp_en = catalogue_excerpt(best_row.get("Function_Desc_EN", ""), doc_vec, embedder, excerpt_length)
+    func_fcp_fr = catalogue_excerpt(best_row.get("Function_Desc_FR", ""), doc_vec, embedder, excerpt_length)
+    sub_fcp_en = catalogue_excerpt(best_row.get("Sub-Function_Desc_EN", ""), doc_vec, embedder, excerpt_length)
+    sub_fcp_fr = catalogue_excerpt(best_row.get("Sub-Function_Desc_FR", ""), doc_vec, embedder, excerpt_length)
+    rec_fcp_en = catalogue_excerpt(best_row.get("Business_Process_EN", ""), doc_vec, embedder, excerpt_length)
+    rec_fcp_fr = catalogue_excerpt(best_row.get("Business_Process_FR", ""), doc_vec, embedder, excerpt_length)
+
     result = {
         "Function_EN": best_row.get("Function_EN", ""),
         "Function_FR": best_row.get("Function_FR", ""),
@@ -238,17 +275,21 @@ def semantic_match(
         "Records": best_row.get("Records", ""),
         "Retention Period": best_row.get("Retention Period", ""),
         "Retention Trigger": best_row.get("Retention Trigger", ""),
-        # optional level numbers if you add columns later
         "File Class No - Level1": best_row.get("File Class No - Level1", ""),
         "File Class No - Level2": best_row.get("File Class No - Level2", ""),
         "File Class No - Level3": best_row.get("File Class No - Level3", ""),
-        # excerpts (already computed above)
-        "Function_Match_Excerpt_EN": func_excerpt_en,
-        "Function_Match_Excerpt_FR": func_excerpt_fr,
-        "Sub_Function_Match_Excerpt_EN": sub_excerpt_en,
-        "Sub_Function_Match_Excerpt_FR": sub_excerpt_fr,
-        "Records_Match_Excerpt_EN": records_excerpt_en,
-        "Records_Match_Excerpt_FR": records_excerpt_fr,
+        "Function_Doc_Excerpt_EN": func_doc_en,
+        "Function_FCP_Excerpt_EN": func_fcp_en,
+        "Function_Doc_Excerpt_FR": func_doc_fr,
+        "Function_FCP_Excerpt_FR": func_fcp_fr,
+        "Sub_Function_Doc_Excerpt_EN": sub_doc_en,
+        "Sub_Function_FCP_Excerpt_EN": sub_fcp_en,
+        "Sub_Function_Doc_Excerpt_FR": sub_doc_fr,
+        "Sub_Function_FCP_Excerpt_FR": sub_fcp_fr,
+        "Records_Doc_Excerpt_EN": rec_doc_en,
+        "Records_FCP_Excerpt_EN": rec_fcp_en,
+        "Records_Doc_Excerpt_FR": rec_doc_fr,
+        "Records_FCP_Excerpt_FR": rec_fcp_fr,
         "overall_confidence": round(conf, 3),
         "sub_function_confidence": round(sub_conf, 3),
         "confidence_category": (
@@ -258,7 +299,6 @@ def semantic_match(
         ),
         "needs_review": "No" if conf >= medium_threshold else "Yes",
     }
-
     logger.info(
         f"Match | conf={conf:.3f} | {result['Function_EN']} → "
         f"{result['Sub-Function_EN']} | review={result['needs_review']}"
@@ -282,12 +322,18 @@ def _fallback_unknown() -> dict:
         "Records": "",
         "Retention Period": "",
         "Retention Trigger": "",
-        "Function_Match_Excerpt_EN": "",
-        "Function_Match_Excerpt_FR": "",
-        "Sub_Function_Match_Excerpt_EN": "",
-        "Sub_Function_Match_Excerpt_FR": "",
-        "Records_Match_Excerpt_EN": "",
-        "Records_Match_Excerpt_FR": "",
+        "Function_Doc_Excerpt_EN": "",
+        "Function_FCP_Excerpt_EN": "",
+        "Function_Doc_Excerpt_FR": "",
+        "Function_FCP_Excerpt_FR": "",
+        "Sub_Function_Doc_Excerpt_EN": "",
+        "Sub_Function_FCP_Excerpt_EN": "",
+        "Sub_Function_Doc_Excerpt_FR": "",
+        "Sub_Function_FCP_Excerpt_FR": "",
+        "Records_Doc_Excerpt_EN": "",
+        "Records_FCP_Excerpt_EN": "",
+        "Records_Doc_Excerpt_FR": "",
+        "Records_FCP_Excerpt_FR": "",
         "overall_confidence": 0.0,
         "sub_function_confidence": 0.0,
         "confidence_category": "Low",
