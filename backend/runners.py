@@ -131,7 +131,7 @@ def run_ingestion() -> Result:
 
 def run_classification(embedder_key: str = "minilm") -> Result:
     key = (embedder_key or "minilm").strip().lower()
-    if key not in ("minilm", "qwen3"):
+    if key not in ("minilm", "qwen3", "qwen3_4b"):
         key = "minilm"
     return _capture_sub(
         "Classification/2_Classification.py",
@@ -144,7 +144,7 @@ def run_placeholder_creator(
     embedder_key: str = "minilm",
 ) -> Result:
     key = (embedder_key or "minilm").strip().lower()
-    if key not in ("minilm", "qwen3"):
+    if key not in ("minilm", "qwen3", "qwen3_4b"):
         key = "minilm"
     return _capture_sub(
         "Metadata_Placeholder/4_placeholder_creator.py",
@@ -154,7 +154,7 @@ def run_placeholder_creator(
 
 def run_metadata_injector(embedder_key: str = "minilm") -> Result:
     key = (embedder_key or "minilm").strip().lower()
-    if key not in ("minilm", "qwen3"):
+    if key not in ("minilm", "qwen3", "qwen3_4b"):
         key = "minilm"
     return _capture_sub(
         "Metadata_Injector/5_metadata_injector.py",

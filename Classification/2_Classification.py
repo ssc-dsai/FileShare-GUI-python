@@ -249,7 +249,7 @@ def main():
     parser.add_argument(
         "--embedder",
         default="minilm",
-        choices=["minilm", "qwen3"],
+        choices=["minilm", "qwen3", "qwen3_4b"],
         help="Which local embedding model to load (only one is loaded).",
     )
     args = parser.parse_args()

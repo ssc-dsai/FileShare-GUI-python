@@ -310,7 +310,7 @@ def main():
     parser.add_argument(
         "--embedder",
         default="minilm",
-        choices=["minilm", "qwen3"],
+        choices=["minilm", "qwen3", "qwen3_4b"],
         help="Which model folder to read placeholders from and write clones into",
     )
     args = parser.parse_args()

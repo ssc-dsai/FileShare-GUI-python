@@ -90,6 +90,7 @@ USER_EDITABLE_FLAGS = (
 )
 
 KNOWN_WORKBOOKS = (
+    "classification_results_qwen3_4b.xlsx",
     "classification_results_qwen3.xlsx",
     "classification_results_minilm.xlsx",
     "classification_results.xlsx",
@@ -246,13 +247,16 @@ def main():
     parser.add_argument(
         "--embedder",
         default="minilm",
-        choices=["minilm", "qwen3"],
+        choices=["minilm", "qwen3", "qwen3_4b"],
         help="Which model folder to write into",
     )
     args = parser.parse_args()
 
     key = args.embedder
-    if "qwen" in (args.excel or "").lower():
+    name = (args.excel or "").lower()
+    if "4b" in name:
+        key = "qwen3_4b"
+    elif "qwen" in name:
         key = "qwen3"
 
     logger.info("=== Metadata Placeholder Creator Started ===")

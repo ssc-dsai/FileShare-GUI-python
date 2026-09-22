@@ -15,6 +15,8 @@ from project_config import (
     PLACEHOLDERS_MINILM_DIR,
     PLACEHOLDERS_QWEN_DIR,
     SOURCE_DOCS_DIR,
+    PLACEHOLDERS_QWEN3_4B_DIR,
+    INJECTED_QWEN3_4B_DIR,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -63,6 +65,7 @@ def _mtime_file(path: Path) -> str:
 def collect_status() -> dict:
     minilm_xlsx = CLASSIFICATION_RESULTS_DIR / "classification_results_minilm.xlsx"
     qwen_xlsx = CLASSIFICATION_RESULTS_DIR / "classification_results_qwen3.xlsx"
+    qwen4_xlsx = CLASSIFICATION_RESULTS_DIR / "classification_results_qwen3_4b.xlsx"
 
     injected_json_m = _count(INJECTED_MINILM_DIR, ["*.metadata.json", "*.json"])
     injected_all_m = _count(INJECTED_MINILM_DIR)
@@ -92,10 +95,14 @@ def collect_status() -> dict:
         "class_minilm_mtime": _mtime_file(minilm_xlsx),
         "class_qwen": qwen_xlsx.is_file(),
         "class_qwen_mtime": _mtime_file(qwen_xlsx),
+        "class_qwen4": qwen4_xlsx.is_file(),
+        "class_qwen4_mtime": _mtime_file(qwen4_xlsx),
         "ph_minilm": _count(PLACEHOLDERS_MINILM_DIR, ["*.json"]),
         "ph_minilm_mtime": _latest_mtime(PLACEHOLDERS_MINILM_DIR, ["*.json"]),
         "ph_qwen": _count(PLACEHOLDERS_QWEN_DIR, ["*.json"]),
         "ph_qwen_mtime": _latest_mtime(PLACEHOLDERS_QWEN_DIR, ["*.json"]),
+        "ph_qwen4": _count(PLACEHOLDERS_QWEN3_4B_DIR, ["*.json"]),
+        "ph_qwen4_mtime": _latest_mtime(PLACEHOLDERS_QWEN3_4B_DIR, ["*.json"]),
         "inj_json_minilm": injected_json_m,
         "inj_clones_minilm": injected_clones_m,
         "inj_minilm_mtime": _latest_mtime(INJECTED_MINILM_DIR),
@@ -135,6 +142,8 @@ _Updated: **{s['now']}**_
 | Extracted texts (.txt) | {s['extracted_texts']} | {s['extracted_mtime']} |
 | Classification MiniLM | {yn_file(s['class_minilm'])} | {s['class_minilm_mtime']} |
 | Classification Qwen3 | {yn_file(s['class_qwen'])} | {s['class_qwen_mtime']} |
+| Classification Qwen3-4B | {yn_file(s['class_qwen4'])} | {s['class_qwen4_mtime']} |
+| Placeholders Qwen3-4B (JSON) | {s['ph_qwen4']} | {s['ph_qwen4_mtime']} |
 | Placeholders MiniLM (JSON) | {s['ph_minilm']} | {s['ph_minilm_mtime']} |
 | Placeholders Qwen3 (JSON) | {s['ph_qwen']} | {s['ph_qwen_mtime']} |
 | Injected MiniLM side-cars | {s['inj_json_minilm']} | {s['inj_minilm_mtime']} |

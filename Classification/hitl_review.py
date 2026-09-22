@@ -48,7 +48,18 @@ CLEAR_COLS = [
 REPORTS = {
     "minilm": CLASSIFICATION_RESULTS_DIR / "classification_results_minilm.xlsx",
     "qwen3": CLASSIFICATION_RESULTS_DIR / "classification_results_qwen3.xlsx",
+    "qwen3_4b": CLASSIFICATION_RESULTS_DIR / "classification_results_qwen3_4b.xlsx",
 }
+
+def report_path(embedder_key: str) -> Path:
+    raw = (embedder_key or "").lower()
+    if raw in REPORTS:
+        return REPORTS[raw]
+    if "4b" in raw:
+        return REPORTS["qwen3_4b"]
+    if "qwen" in raw:
+        return REPORTS["qwen3"]
+    return REPORTS["minilm"]
 
 _ILLEGAL_XML = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 
@@ -60,11 +71,6 @@ def _sanitize_for_excel(df: pd.DataFrame) -> pd.DataFrame:
             lambda v: _ILLEGAL_XML.sub("", v) if isinstance(v, str) else v
         )
     return out
-
-
-def report_path(embedder_key: str) -> Path:
-    key = "qwen3" if "qwen" in (embedder_key or "").lower() else "minilm"
-    return REPORTS[key]
 
 
 def load_fcp() -> pd.DataFrame:

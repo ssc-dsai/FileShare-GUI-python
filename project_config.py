@@ -39,16 +39,23 @@ INJECTED_METADATA_DIR = Path(os.getenv(
 # Per-model output trees (placeholders + clones)
 INJECTED_MINILM_DIR = INJECTED_METADATA_DIR / "minilm"
 INJECTED_QWEN_DIR = INJECTED_METADATA_DIR / "qwen3"
+INJECTED_QWEN3_4B_DIR = INJECTED_METADATA_DIR / "qwen3_4b"
 PLACEHOLDERS_MINILM_DIR = INJECTED_MINILM_DIR / "placeholders"
 PLACEHOLDERS_QWEN_DIR = INJECTED_QWEN_DIR / "placeholders"
+PLACEHOLDERS_QWEN3_4B_DIR = INJECTED_QWEN3_4B_DIR / "placeholders"
 
 
 def metadata_dirs_for(embedder_key: str) -> dict:
     """Separate placeholder + clone folders per embedding model."""
     key = (embedder_key or "minilm").strip().lower()
-    if key not in ("minilm", "qwen3"):
+    if key not in ("minilm", "qwen3", "qwen3_4b"):
         key = "minilm"
-    root = INJECTED_MINILM_DIR if key == "minilm" else INJECTED_QWEN_DIR
+    if key == "minilm":
+        root = INJECTED_MINILM_DIR
+    elif key == "qwen3_4b":
+        root = INJECTED_QWEN3_4B_DIR
+    else:
+        root = INJECTED_QWEN_DIR
     return {
         "key": key,
         "root": root,
@@ -63,17 +70,28 @@ MODELS_DIR = Path(os.getenv(
     r"C:\JAY_DOCS\models"
 )).resolve()
 
+
+
+
 EMBEDDING_MODEL_MINILM_PATH = Path(os.getenv(
     "EMBEDDING_MODEL",
     str(MODELS_DIR / "paraphrase-multilingual-MiniLM-L12-v2")
 )).resolve()
+
+EMBEDDING_MODEL_PATH = EMBEDDING_MODEL_MINILM_PATH
 
 EMBEDDING_MODEL_QWEN_PATH = Path(os.getenv(
     "EMBEDDING_MODEL_QWEN",
     str(MODELS_DIR / "Qwen3-Embedding-0.6B")
 )).resolve()
 
-EMBEDDING_MODEL_PATH = EMBEDDING_MODEL_MINILM_PATH
+EMBEDDING_MODEL_QWEN3_4B_PATH = Path(os.getenv(
+    "EMBEDDING_MODEL_QWEN3_4B",
+    str(MODELS_DIR / "Qwen3-Embedding-4B"),
+)).resolve()
+
+INJECTED_QWEN3_4B_DIR = INJECTED_METADATA_DIR / "qwen3_4b"
+PLACEHOLDERS_QWEN3_4B_DIR = INJECTED_QWEN3_4B_DIR / "placeholders"
 
 VISION_MODEL_PATH = Path(os.getenv(
     "VISION_MODEL",
@@ -92,12 +110,20 @@ EMBEDDER_CHOICES = {
         "results_stem": "classification_results_minilm",
     },
     "qwen3": {
-        "label": "Qwen3-Embedding-0.6B (stronger, GPU)",
+        "label": "Qwen3-0.6B (stronger, GPU)",
         "path": EMBEDDING_MODEL_QWEN_PATH,
         "cache_subdir": "qwen3_0.6b",
         "use_instruction": True,
         "chunk_chars": 1800,
         "results_stem": "classification_results_qwen3",
+    },
+    "qwen3_4b": {
+        "label": "Qwen3-4B (strongest, heavy and slower)",
+        "path": EMBEDDING_MODEL_QWEN3_4B_PATH,
+        "cache_subdir": "qwen3_4b",
+        "use_instruction": True,
+        "chunk_chars": 1800,
+        "results_stem": "classification_results_qwen3_4b",
     },
 }
 
@@ -141,6 +167,9 @@ def ensure_directories():
         PLACEHOLDERS_MINILM_DIR,
         PLACEHOLDERS_QWEN_DIR,
         MODELS_DIR,
+        INJECTED_QWEN3_4B_DIR,
+        PLACEHOLDERS_QWEN3_4B_DIR,
+        EMBEDDING_MODEL_QWEN3_4B_PATH,
     ]
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)
@@ -155,6 +184,9 @@ def ensure_directories():
     print(f"   • Placeholders MiniLM    : {PLACEHOLDERS_MINILM_DIR}")
     print(f"   • Injected Qwen3         : {INJECTED_QWEN_DIR}")
     print(f"   • Placeholders Qwen3     : {PLACEHOLDERS_QWEN_DIR}")
+    print(f"   • Injected Qwen3-4B      : {INJECTED_QWEN3_4B_DIR}")
+    print(f"   • Placeholders Qwen3-4B  : {PLACEHOLDERS_QWEN3_4B_DIR}")
+    print(f"   • Qwen3-4B embedder      : {EMBEDDING_MODEL_QWEN3_4B_PATH}")
     print(f"   • Local models           : {MODELS_DIR}")
     print(f"   • MiniLM embedder        : {EMBEDDING_MODEL_MINILM_PATH}")
     print(f"   • Qwen3 embedder         : {EMBEDDING_MODEL_QWEN_PATH}")
@@ -168,3 +200,4 @@ print(f"   SOURCE_DOCS_DIR             = {SOURCE_DOCS_DIR}")
 print(f"   EMBEDDING_MODEL_MINILM_PATH = {EMBEDDING_MODEL_MINILM_PATH}")
 print(f"   EMBEDDING_MODEL_QWEN_PATH   = {EMBEDDING_MODEL_QWEN_PATH}")
 print(f"   VISION_MODEL_PATH           = {VISION_MODEL_PATH}")
+print(f"   EMBEDDING_MODEL_QWEN3_4B_PATH = {EMBEDDING_MODEL_QWEN3_4B_PATH}")

@@ -72,7 +72,7 @@ COLUMNS_ORDER = [
     "Records_Doc_Excerpt_EN",
     "Records_FCP_Excerpt_EN",
     "Records_Doc_Excerpt_FR",
-    "Records_FCP_Excerpt_FR"
+    "Records_FCP_Excerpt_FR",
     # Retention / disposition (from hierarchy when available)
     "Retention Period",
     "Retention Trigger",

@@ -40,6 +40,9 @@ from project_config import (
     SOURCE_DOCS_DIR,
     VISION_MODEL_PATH,
     HIERARCHY_CSV,
+    EMBEDDING_MODEL_QWEN3_4B_PATH,
+    INJECTED_QWEN3_4B_DIR,
+    PLACEHOLDERS_QWEN3_4B_DIR,
 )
 
 from Classification.hitl_review import (
@@ -92,14 +95,35 @@ def refresh_dashboard() -> str:
     return _status_markdown()
 
 
+RADIO_TO_KEY = {
+    "MiniLM (fast baseline)": "minilm",
+    "Qwen3-0.6B (stronger GPU)": "qwen3",
+    "Qwen3-4B (strongest, heavy and slower)": "qwen3_4b",
+}
+RADIO_CHOICES = list(RADIO_TO_KEY.keys())
+
+
 def _embedder_key(choice: str) -> str:
-    return "qwen3" if "qwen" in (choice or "").lower() else "minilm"
+    if choice in RADIO_TO_KEY:
+        return RADIO_TO_KEY[choice]
+    c = (choice or "").lower()
+    if "4b" in c:
+        return "qwen3_4b"
+    if "qwen" in c:
+        return "qwen3"
+    return "minilm"
 
 
 def _excel_for_embedder(choice: str) -> str:
-    if "qwen" in (choice or "").lower():
-        return "classification_results_qwen3.xlsx"
-    return "classification_results_minilm.xlsx"
+    return {
+        "qwen3_4b": "classification_results_qwen3_4b.xlsx",
+        "qwen3": "classification_results_qwen3.xlsx",
+        "minilm": "classification_results_minilm.xlsx",
+    }.get(_embedder_key(choice), "classification_results_minilm.xlsx")
+
+
+def _hitl_key(choice: str) -> str:
+    return _embedder_key(choice)
 
 
 def ui_run_dedup() -> str:
@@ -130,11 +154,12 @@ def ui_run_ingestion() -> str:
 
 def ui_run_classification(embedder_choice: str) -> str:
     key = _embedder_key(embedder_choice)
-    stem = (
-        "classification_results_qwen3"
-        if key == "qwen3"
-        else "classification_results_minilm"
-    )
+    stem = {
+        "qwen3_4b": "classification_results_qwen3_4b",
+        "qwen3": "classification_results_qwen3",
+        "minilm": "classification_results_minilm",
+    }.get(key, "classification_results_minilm")
+
     ok, log, _ = run_classification(key)
     header = "✅ Classification finished" if ok else "❌ Classification failed"
     extra = f"\n\nExcel: `{CLASSIFICATION_RESULTS_DIR / (stem + '.xlsx')}`"
@@ -145,7 +170,13 @@ def ui_run_placeholders(embedder_choice: str, excel_name: str) -> str:
     key = _embedder_key(embedder_choice)
     name = (excel_name or "").strip() or _excel_for_embedder(embedder_choice)
     ok, log, _ = run_placeholder_creator(name, embedder_key=key)
-    out = PLACEHOLDERS_QWEN_DIR if key == "qwen3" else PLACEHOLDERS_MINILM_DIR
+    if key == "qwen3_4b":
+        out = PLACEHOLDERS_QWEN3_4B_DIR
+    elif key == "qwen3":
+        out = PLACEHOLDERS_QWEN_DIR
+    else:
+        out = PLACEHOLDERS_MINILM_DIR
+
     header = "✅ Placeholders created" if ok else "❌ Placeholder creation failed"
     extra = f"\n\nExcel: `{name}`\nFolder: `{out}`"
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
@@ -154,7 +185,13 @@ def ui_run_placeholders(embedder_choice: str, excel_name: str) -> str:
 def ui_run_injector(embedder_choice: str) -> str:
     key = _embedder_key(embedder_choice)
     ok, log, _ = run_metadata_injector(embedder_key=key)
-    out = INJECTED_QWEN_DIR if key == "qwen3" else INJECTED_MINILM_DIR
+    if key == "qwen3_4b":
+        out = INJECTED_QWEN3_4B_DIR
+    elif key == "qwen3":
+        out = INJECTED_QWEN_DIR
+    else:
+        out = INJECTED_MINILM_DIR
+
     header = "✅ Metadata injection finished" if ok else "❌ Metadata injection failed"
     extra = f"\n\nOutput: `{out}`"
     return f"{header}{extra if ok else ''}\n\n```\n{log}\n```"
@@ -278,6 +315,7 @@ def build_ui() -> gr.Blocks:
             with gr.Row():
                 gr.Textbox(label="PLACEHOLDERS_MINILM_DIR", value=str(PLACEHOLDERS_MINILM_DIR), interactive=False)
                 gr.Textbox(label="PLACEHOLDERS_QWEN_DIR", value=str(PLACEHOLDERS_QWEN_DIR), interactive=False)
+                gr.Textbox(label="PLACEHOLDERS_QWEN3_4B_DIR", value=str(PLACEHOLDERS_QWEN3_4B_DIR), interactive=False)
 
             gr.Markdown("#### Injected clones (per model)")
             with gr.Row():
@@ -294,6 +332,11 @@ def build_ui() -> gr.Blocks:
                 gr.Textbox(
                     label="EMBEDDING_MODEL_QWEN_PATH",
                     value=str(EMBEDDING_MODEL_QWEN_PATH),
+                    interactive=False,
+                )
+                gr.Textbox(
+                    label="EMBEDDING_MODEL_QWEN3_4B_PATH",
+                    value=str(EMBEDDING_MODEL_QWEN3_4B_PATH),
                     interactive=False,
                 )
             gr.Textbox(label="VISION_MODEL_PATH", value=str(VISION_MODEL_PATH), interactive=False)
@@ -350,18 +393,15 @@ def build_ui() -> gr.Blocks:
             gr.Markdown(
                 f"""
                 ### Phase 2 – Classification
-                Choose **one** embedding model.
-                - MiniLM → `classification_results_minilm.xlsx`
-                - Qwen3 → `classification_results_qwen3.xlsx`
-                Folder: `{CLASSIFICATION_RESULTS_DIR}`
+                Choose **one** embedding model (only one is loaded).
+                - MiniLM (fast baseline) → `classification_results_minilm.xlsx`
+                - Qwen3-0.6B (stronger GPU) → `classification_results_qwen3.xlsx`
+                - Qwen3-4B (strongest, heavy and slower) → `classification_results_qwen3_4b.xlsx`
+                - Folder: `{CLASSIFICATION_RESULTS_DIR}`
                 """
             )
             embedder_radio = gr.Radio(
-                label="Embedding model (one at a time)",
-                choices=[
-                    "MiniLM (fast baseline)",
-                    "Qwen3-Embedding-0.6B (stronger, GPU)",
-                ],
+                choices=RADIO_CHOICES,
                 value="MiniLM (fast baseline)",
             )
             btn_class = gr.Button("▶ Run Classification", variant="primary")
@@ -379,11 +419,7 @@ def build_ui() -> gr.Blocks:
                 """
             )
             hitl_model = gr.Radio(
-                label="Which report?",
-                choices=[
-                    "MiniLM (fast baseline)",
-                    "Qwen3-Embedding-0.6B (stronger, GPU)",
-                ],
+                choices=RADIO_CHOICES,
                 value="MiniLM (fast baseline)",
             )
             btn_hitl_load = gr.Button("▶ Load report", variant="secondary")
@@ -432,11 +468,7 @@ def build_ui() -> gr.Blocks:
                 """
             )
             ph_embedder = gr.Radio(
-                label="Which classification report?",
-                choices=[
-                    "MiniLM (fast baseline)",
-                    "Qwen3-Embedding-0.6B (stronger, GPU)",
-                ],
+                choices=RADIO_CHOICES,
                 value="MiniLM (fast baseline)",
             )
             excel_name = gr.Textbox(
