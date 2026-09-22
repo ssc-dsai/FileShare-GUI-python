@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-
+from langdetect import DetectorFactory, detect_langs
+from langdetect.lang_detect_exception import LangDetectException
 from project_config import DOC_TYPE_DICT, REGEX_DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -26,27 +27,66 @@ logger = logging.getLogger(__name__)
 # Language
 # ---------------------------------------------------------------------------
 
+DetectorFactory.seed = 0  # stable results
+
+_CHUNK = 500
+_MIN_TEXT = 40
+_BIL_SHARE = 0.25
+
+
+def _chunks(text: str, size: int = _CHUNK) -> list[str]:
+    text = " ".join((text or "").split())
+    if not text:
+        return []
+    return [text[i : i + size] for i in range(0, len(text), size)]
+
+
+def _chunk_label(chunk: str) -> str | None:
+    try:
+        langs = detect_langs(chunk)
+    except LangDetectException:
+        return None
+    if not langs:
+        return None
+    top = langs[0]
+    if top.prob < 0.55:
+        return None
+    if top.lang.startswith("en"):
+        return "en"
+    if top.lang.startswith("fr"):
+        return "fr"
+    return None
+
+
 def enrich_language(text: str) -> dict:
-    if not text or len(text) < 50:
+    raw = (text or "").strip()
+    if len(raw) < _MIN_TEXT:
         return {"language_detected": "und"}
 
-    sample = text[:3000].lower()
-    fr = len(re.findall(
-        r"\b(les?|la|le|des?|du|de|et|pour|dans|sur|avec|est|sont|que|qui|ce|cette|ces)\b",
-        sample,
-    )) + len(re.findall(r"[éèêëàâäôöûüç]", sample))
-    en = len(re.findall(
-        r"\b(the|and|or|to|of|in|for|on|with|is|are|this|that|these|those|be|have|do|will|can)\b",
-        sample,
-    ))
+    votes = {"en": 0, "fr": 0}
+    scored = 0
+    for ch in _chunks(raw):
+        if len(ch) < 30:
+            continue
+        lab = _chunk_label(ch)
+        if lab is None:
+            continue
+        votes[lab] += 1
+        scored += 1
 
-    if fr > 8 and en > 8:
+    if scored == 0:
+        return {"language_detected": "und"}
+
+    en_share = votes["en"] / scored
+    fr_share = votes["fr"] / scored
+
+    if en_share >= _BIL_SHARE and fr_share >= _BIL_SHARE:
         return {"language_detected": "Bil"}
-    if fr > en * 1.8:
+    if fr_share > en_share:
         return {"language_detected": "French / Français"}
-    if en > fr * 1.8:
+    if en_share > fr_share:
         return {"language_detected": "English / Anglais"}
-    return {"language_detected": "Bil" if (fr + en) > 5 else "und"}
+    return {"language_detected": "Bil"}
 
 
 # ---------------------------------------------------------------------------
