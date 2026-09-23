@@ -110,11 +110,14 @@ def extract_text_from_file(
 
 
 def _save_pdf_pixmap(doc, xref: int, out_path: Path) -> bool:
-    """Save one PDF embedded image. Returns True if a usable file was written."""
+    """Save one PDF image. Skip masks / empty colourspace."""
     if fitz is None:
         return False
     try:
         pix = fitz.Pixmap(doc, xref)
+        if pix.colorspace is None:
+            # Stencil mask — not a real picture
+            return False
         if pix.n - pix.alpha > 3:
             pix = fitz.Pixmap(fitz.csRGB, pix)
         elif pix.alpha:
