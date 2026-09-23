@@ -50,6 +50,8 @@ timestamp = datetime.now().strftime("%Y%m%d_%H%M")
 OUTPUT_EXCEL = DEDUPS_DIR / f"deduplication_review_{timestamp}.xlsx"
 LOG_FILE = DEDUPS_DIR / f"dedup_analysis_{timestamp}.log"
 
+
+
 # ---------------------------------------------------------------------------
 # Logging (captured by Gradio)
 # ---------------------------------------------------------------------------
@@ -90,8 +92,14 @@ if not EMBEDDING_MODEL_PATH.exists():
         "Please download it first."
     )
 
-embedder = SentenceTransformer(str(EMBEDDING_MODEL_PATH))
-logger.info("Embedding model ready (local, offline)")
+try:
+    import torch
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+except Exception:
+    device = "cpu"
+
+embedder = SentenceTransformer(str(EMBEDDING_MODEL_PATH), device=device)
+logger.info(f"Embedding model ready (local, offline) | device={device}")
 
 
 # ---------------------------------------------------------------------------

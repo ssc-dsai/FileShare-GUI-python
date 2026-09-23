@@ -49,8 +49,12 @@ Only **one** embedder is loaded at a time. Caches live under `classification_res
 - **Python:** 3.10+ (3.11 tested in development)  
 - **Optional:** Microsoft Office (licensed) for native Word/Excel property injection  
 - **Disk:** space for models (embedder is small; Qwen2-VL-2B is larger) and document working folders  
-- **GPU (optional):** helps vision; CPU works more slowly  
-
+- **GPU (optional):** helps vision; CPU works more slowly
+- If you have GPU: first ensure to uninstall and install the necessary CUDA driver (~2.8GB):
+   - python -m pip uninstall torch torchvision torchaudio -y
+   - python -m pip cache purge
+   - python -m pip install torch --index-url https://download.pytorch.org/whl/cu128 --no-cache-dir
+- Confirm install by typing: py -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 ---
 
 ## Repository layout (high level)
