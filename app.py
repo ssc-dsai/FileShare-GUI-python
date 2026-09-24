@@ -4,6 +4,8 @@ FileShare-GUI – Gradio orchestrator
 Launch:
     python app.py
 """
+from __future__ import annotations
+
 import os
 import sys
 
@@ -22,8 +24,6 @@ if sys.platform == "win32":
         ctypes.windll.kernel32.SetConsoleCP(65001)
     except Exception:
         pass
-
-from __future__ import annotations
 
 import sys
 from pathlib import Path
