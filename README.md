@@ -87,6 +87,7 @@ FileShare-GUI/
    `C:\FileShare-GUI`  
    Do **not** copy under `Program Files`.
 
+**You must have at minimum Git CLI installed which you can obtain here: https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.1/Git-2.56.0-64-bit.exe**
 ### Option B — Git clone
 
 ```bash
@@ -114,22 +115,6 @@ conda create -n FileShare-GUI python=3.11 -y
 conda activate FileShare-GUI
 python -m pip install -r requirements.txt
 ```
-
-### spaCy language models (once per environment)
-
-```bash
-python -m spacy download en_core_web_sm
-python -m spacy download fr_core_news_sm
-```
-### Option B — if admin rights prevent you to downloading spaCy
-```bash
-Navigate to: https://spacy.io/models/en#en_core_web_sm
-- Click on the Download Link and download to to your machine
-Navigate to: https://spacy.io/models/fr#fr_core_news_sm
-- Click on the Download Link and download to to your machine
-Move both "en_core_web_sm-3.8.0-py3-none-any.whl" and "fr_core_news_sm-3.8.0-py3-none-any.whl" from the downloads folder to C:\FileShare-GUI
-```
-
 ### Windows only (native Office injection)
 
 ```bash
