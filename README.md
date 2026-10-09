@@ -1,332 +1,107 @@
-```markdown
-# FileShare-GUI
+([Français](#fileshare-gui--application-locale-de-classification))
 
-Local Gradio app for **deduplication, text extraction, FCP classification, human review, and metadata injection**.
+## FileShare-GUI
 
-It runs on a **single Windows workstation**. After the Hugging Face models are saved on disk, the pipeline can run **offline**. No Ollama and no cloud OCR.
+### What is this project?
 
----
+FileShare-GUI is a local Windows application for records staff. It deduplicates files, extracts text, classifies documents against the FCP hierarchy in `fcp_CSV-UTF.csv`, lets a person correct the class, and writes metadata onto Office clones.
 
-## What it does
+It runs on one workstation. After the Hugging Face models are saved on disk, the pipeline can run offline. It does not use Ollama or a cloud OCR service.
 
-| Phase | Tab | Purpose |
-|-------|-----|---------|
-| 0 | Deduplication | Exact / near-duplicate scan, Excel review, optional dry-run then delete |
-| 1 | Ingestion | Extract text from Office / PDF / images / txt; export vision images under `extracted_texts/_images` |
-| 2 | Classification | Match text to `fcp_CSV-UTF.csv` with **one** local embedder (MiniLM or Qwen3-Embedding-0.6B). Optional image captions via local Qwen2-VL |
-| 2b | Review / override | Human picks Function → Sub-Function → Business Process from the FCP list. Official bilingual fields are written back into the **same** MiniLM or Qwen3 workbook. Excerpt columns are cleared |
-| 3 | Placeholders | JSON side-cars from that workbook, including Litigation_hold / Archival_value / critical_business_content |
-| 4 | Injector | Clone originals into a **per-model** folder; native Office properties when possible; always a JSON side-car |
+### How does it work?
 
-The Gradio UI also has a Dashboard, a read-only Configuration view, and a Stop button (stop does not undo files already written).
+The Gradio interface (`app.py`) runs these phases, in order:
 
----
+1. **Deduplication** — exact and near-duplicate scan, Excel review, optional dry-run, then delete.
+2. **Ingestion** — text from Office, PDF, images, and `.txt`. Vision images are saved under `extracted_texts/_images`.
+3. **Classification** — one local embedder at a time (MiniLM, Qwen3-Embedding-0.6B, or Qwen3-Embedding-4B). Image captions use local Qwen2-VL when a file is vision-flagged.
+4. **Review / override** — the reviewer picks Function, then Sub-Function, then Business Process from the FCP list. The same workbook is updated. Excerpt columns are cleared on override.
+5. **Placeholders** — one JSON side-car per document, including Litigation_hold, Archival_value, and critical_business_content.
+6. **Injector** — clones originals into a folder for that embedder. Word can receive built-in properties (Title, Subject, Tags) and custom properties (File → Info → Properties → Advanced Properties → Custom). The JSON side-car remains the full record.
 
-## Two embedding models
+Reports and clones stay separate per model (`classification_results_minilm.xlsx`, `classification_results_qwen3.xlsx`, `classification_results_qwen3_4b.xlsx`, and `Injected_Metadata\minilm`, `\qwen3`, `\qwen3_4b`).
 
-| Choice | Report | Placeholders / clones |
-|--------|--------|------------------------|
-| MiniLM (fast) | `classification_results_minilm.xlsx` | `Injected_Metadata\minilm\` |
-| Qwen3-Embedding-0.6B | `classification_results_qwen3.xlsx` | `Injected_Metadata\qwen3\` |
+**Setup (each machine)**
 
-Only **one** embedder is loaded at a time. Caches live under `classification_results\embedding_cache\minilm\` and `...\qwen3_0.6b\`. Do not mix those folders.
+1. Download the ZIP from the repository, or `git clone` it, into a user-writable folder. Do not install under `Program Files`.
+2. Create a virtual environment and install dependencies: `python -m venv .venv`, activate it, then `python -m pip install -r requirements.txt`. On a managed PC with no Conda, use the installed `py` and `py -m pip`.
+3. Download the embedders and the vision model once (network required) into the folders named in `project_config.py`. Runtime is offline after that.
+4. Edit absolute paths only in `project_config.py` (source documents, extracts, results, models, resources). Save and restart after any change.
+5. From the project folder, run `py app.py` and open `http://127.0.0.1:7860`.
 
----
+Stop cancels the current job. Files already written are kept. There is no undo.
 
-## Design principles
+Office injection needs a licensed Microsoft Office install and `pywin32` (Windows only). If COM injection fails, the JSON side-car is still written. PDF and plain-text files do not receive native Office properties.
 
-- **Local-first / offline runtime** — no Ollama, no OCR cloud APIs, no required internet after model download  
-- **Independent absolute paths** — source docs, extracts, results and models can each live on different drives or DFS shares  
-- **One config file** — set paths in `project_config.py` once per machine, then restart the app  
-- **Human review** — classification and dedup produce Excel workbooks; selected columns (e.g. litigation hold) can be edited before placeholders/injection  
-- **Managed-device friendly** — no admin install required if Python/conda is already available; distribute as a GitHub ZIP  
+### Who will use this project?
 
----
+Records and information-management staff, and the analyst who configures paths on a managed Windows workstation. Reviewers correct classification in Excel or in the Review / override tab. It is not a public web service.
 
-## Requirements
+### What is the goal of this project?
 
-- **OS:** Windows recommended (Office metadata injection via `pywin32` is Windows-only). Core pipeline works on other OS without native Office inject.  
-- **Python:** 3.10+ (3.11 tested in development)  
-- **Optional:** Microsoft Office (licensed) for native Word/Excel property injection  
-- **Disk:** space for models (embedder is small; Qwen2-VL-2B is larger) and document working folders  
-- **GPU (optional):** helps vision; CPU works more slowly
-- If you have GPU: first ensure to uninstall and install the necessary CUDA driver (~2.8GB):
-   - python -m pip uninstall torch torchvision torchaudio -y
-   - python -m pip cache purge
-   - python -m pip install torch --index-url https://download.pytorch.org/whl/cu128 --no-cache-dir
-- Confirm install by typing: py -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
----
+Give staff a local, repeatable way to classify documents to the FCP hierarchy, keep a human in the loop, and carry the agreed metadata onto Office copies and JSON side-cars — without sending document text to an online model at runtime.
 
-## Repository layout (high level)
+### How to Contribute
 
-```text
-FileShare-GUI/
-├── app.py                 # Gradio UI
-├── project_config.py      # ALL absolute paths (edit on each machine)
-├── requirements.txt
-├── backend/               # runners, job control, dashboard status
-├── Classification/
-├── Ingestion/
-├── DeDuplication/
-├── Metadata_Placeholder/
-├── Metadata_Injector/
-└── Resources-Sources/     # fcp_CSV-UTF.csv, dictionaries, RegEx, etc.
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Not in Git (keep local):** virtualenv, model weight folders, live document corpora, classification outputs, indexes.
+### License
 
----
+Unless otherwise noted, the source code of this project is covered under Crown Copyright, Government of Canada, and is distributed under the [MIT License](LICENSE).
 
-## 1. Get the code
+The Canada wordmark and related graphics associated with this distribution are protected under trademark law and copyright law. No permission is granted to use them outside the parameters of the Government of Canada's corporate identity program. For more information, see [Federal identity requirements](https://www.canada.ca/en/treasury-board-secretariat/topics/government-communications/federal-identity-requirements.html).
 
-### Option A — ZIP (recommended for end users)
+______________________
 
-1. Open the GitHub repo: `https://github.com/ssc-dsai/FileShare-GUI-python`  
-2. **Code → Download ZIP**  
-3. Extract to a **user-writable** folder, e.g.  
-   `C:\FileShare-GUI`  
-   Do **not** copy under `Program Files`.
+([English](#fileshare-gui))
 
-**You must have at minimum Git CLI installed which you can obtain here: https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.1/Git-2.56.0-64-bit.exe**
-### Option B — Git clone
+## FileShare-GUI — application locale de classification
 
-```bash
-git clone https://github.com/ssc-dsai/FileShare-GUI-python.git
-cd FileShare-GUI-python
-```
+### Quel est ce projet?
 
----
+FileShare-GUI est une application Windows locale destinée au personnel de gestion des documents. Elle repère les doublons, extrait le texte, classe les documents selon la hiérarchie du FCP dans `fcp_CSV-UTF.csv`, permet à une personne de corriger la classe, puis inscrit les métadonnées sur des copies Office.
 
-## 2. Create a Python environment
+Elle s’exécute sur un seul poste. Une fois les modèles Hugging Face enregistrés sur le disque, le pipeline peut fonctionner hors ligne. Elle n’utilise pas Ollama ni un service d’OCR infonuagique.
 
-**venv:**
+### Comment ça marche?
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
+L’interface Gradio (`app.py`) enchaîne les phases suivantes :
 
-**or conda / miniconda:**
+1. **Déduplication** — repérage des doublons exacts et proches, examen dans Excel, essai à blanc facultatif, puis suppression.
+2. **Ingestion** — texte tiré des fichiers Office, PDF, images et `.txt`. Les images pour la vision sont enregistrées sous `extracted_texts/_images`.
+3. **Classification** — un seul modèle d’intégration à la fois (MiniLM, Qwen3-Embedding-0.6B ou Qwen3-Embedding-4B). Les légendes d’images utilisent Qwen2-VL en local lorsque le fichier est marqué pour la vision.
+4. **Examen / remplacement** — la personne choisit la fonction, puis la sous-fonction, puis le processus opérationnel dans la liste du FCP. Le même classeur est mis à jour. Les colonnes d’extraits sont vidées en cas de remplacement.
+5. **Espaces réservés** — un fichier JSON d’accompagnement par document, y compris Litigation_hold, Archival_value et critical_business_content.
+6. **Injection** — copie des originaux dans un dossier propre au modèle. Word peut recevoir les propriétés intégrées (Titre, Sujet, Mots-clés) et les propriétés personnalisées (Fichier → Informations → Propriétés → Propriétés avancées → Personnalisation). Le JSON d’accompagnement demeure le dossier complet.
 
-```bash
-conda create -n FileShare-GUI python=3.11 -y
-conda activate FileShare-GUI
-python -m pip install -r requirements.txt
-```
-### Windows only (native Office injection)
+Les rapports et les copies restent séparés par modèle (`classification_results_minilm.xlsx`, `classification_results_qwen3.xlsx`, `classification_results_qwen3_4b.xlsx`, et `Injected_Metadata\minilm`, `\qwen3`, `\qwen3_4b`).
 
-```bash
-python -m pip install pywin32
-```
+**Installation (chaque poste)**
 
-If COM injection fails, the app still writes **`.metadata.json` side-cars**.
+1. Télécharger le ZIP du dépôt, ou faire un `git clone`, dans un dossier accessible en écriture. Ne pas installer sous `Program Files`.
+2. Créer un environnement virtuel et installer les dépendances : `python -m venv .venv`, l’activer, puis `python -m pip install -r requirements.txt`. Sur un poste géré sans Conda, utiliser le `py` déjà installé et `py -m pip`.
+3. Télécharger une fois les modèles d’intégration et le modèle de vision (réseau requis) dans les dossiers indiqués dans `project_config.py`. L’exécution est ensuite hors ligne.
+4. Modifier les chemins absolus uniquement dans `project_config.py` (documents sources, extraits, résultats, modèles, ressources). Enregistrer et redémarrer après tout changement.
+5. Depuis le dossier du projet, lancer `py app.py` et ouvrir `http://127.0.0.1:7860`.
 
----
+Le bouton d’arrêt annule le travail en cours. Les fichiers déjà écrits sont conservés. Il n’y a pas d’annulation.
 
-## 3. Download models from Hugging Face (one-time, needs network)
+L’injection Office exige une installation sous licence de Microsoft Office et `pywin32` (Windows seulement). Si l’injection COM échoue, le JSON d’accompagnement est tout de même écrit. Les PDF et les fichiers texte ne reçoivent pas de propriétés Office natives.
 
-Runtime is offline; **first-time download requires internet**.
+### Qui utilisera ce projet?
 
-Create a models root (example):
+Le personnel de gestion des documents et de l’information, et l’analyste qui configure les chemins sur un poste Windows géré. Les examinateurs corrigent la classification dans Excel ou dans l’onglet Examen / remplacement. Ce n’est pas un service Web public.
 
-```text
-C:\FileShare-GUI\models
-```
+### Quel est le but de ce projet?
 
-### Embedding model (required for classification vectors)
+Offrir au personnel un moyen local et reproductible de classer les documents selon la hiérarchie du FCP, de garder une personne dans la boucle, et de reporter les métadonnées convenues sur des copies Office et des fichiers JSON d’accompagnement — sans envoyer le texte des documents à un modèle en ligne au moment de l’exécution.
 
-`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+### Comment contribuer
 
-```bash
-python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; d=Path(r'C:\FileShare-GUI\models\paraphrase-multilingual-MiniLM-L12-v2'); d.mkdir(parents=True, exist_ok=True); m=SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); m.save(str(d)); print('Done', d)"
-python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; d=Path(r'C:\FileShare-GUI\models\Qwen2-VL-2B-Instruct'); d.mkdir(parents=True, exist_ok=True); m=SentenceTransformer('sentence-transformers/Qwen2-VL-2B-Instruct'); m.save(str(d)); print('Done', d)"
-python -c "from sentence_transformers import SentenceTransformer; from pathlib import Path; d=Path(r'C:\FileShare-GUI\models\Qwen3-Embeddings-0.6B'); d.mkdir(parents=True, exist_ok=True); m=SentenceTransformer('sentence-transformers/Qwen3-Embeddings-0.6B'); m.save(str(d)); print('Done', d)"
-```
-### Option B — if admin rights prevent you to downloading HuggingFace models
-```bash
-From the Command Line, type the following once your in th project directory
+Voir [CONTRIBUTING.md](CONTRIBUTING.md).
 
-cd C:\FileShare-GUI\models
+### Licence
 
-git -c http.sslVerify=false clone https://huggingface.co/Qwen/Qwen2-VL-2B-Instruct
-git -c http.sslVerify=false clone https://huggingface.co/sentence-transformers/paraphrase-MiniLM-L12-v2
-git -c http.sslVerify=false clone https://huggingface.co/Qwen/Qwen3-Embedding-0.6B
-```
+Sauf indication contraire, le code source de ce projet est protégé par le droit d'auteur de la Couronne du gouvernement du Canada et distribué sous la [licence MIT](LICENSE).
 
-### Vision model (required for image-flagged documents)
-
-`Qwen/Qwen2-VL-2B-Instruct`
-
-Download with the same approach you used in development (Hugging Face `snapshot_download` / transformers save into):
-
-```text
-C:\FileShare-GUI\models\Qwen2-VL-2B-Instruct
-```
-
-Point `project_config.py` at these folders (see below).
-
-After download, by default the offline-friendly environment variables are preset when starting the app:
-
-```text
-HF_HUB_OFFLINE=1
-TRANSFORMERS_OFFLINE=1
-```
-
----
-
-## 4. Configure paths (only place to set them)
-
-Edit **`project_config.py`** on the machine. Set each absolute path to real folders on that PC or DFS share.
-
-Typical entries:
-
-| Setting | Meaning |
-|---------|---------|
-| `SOURCE_DOCS_DIR` | Incoming documents to process |
-| `EXTRACTED_TEXTS_DIR` | Extracted `.txt` + `_images` |
-| `CLASSIFICATION_RESULTS_DIR` | Excel/CSV + embedding cache |
-| `DEDUPS_DIR` | Deduplication reports |
-| `INJECTED_METADATA_DIR` | Clones + placeholders |
-| `MODELS_DIR` / `EMBEDDING_MODEL_PATH` / `VISION_MODEL_PATH` | Local model folders |
-| `RESOURCES` paths | `fcp_CSV-UTF.csv`, dictionaries, RegEx, trivial subjects |
-
-**Rules:**
-
-- Paths are **independent** (no single required data root).  
-- **Restart** the Gradio app after any path change.  
-- Do not put live data only inside the folder you overwrite when installing a new ZIP.
-
-Ensure `Resources-Sources` files ship with the repo (FCP CSV, `Doc_Type_Dictionary.txt`, `RegEx-db.csv`, `trivial_subjects.txt`).
-
----
-
-## 5. Start the application
-
-```bash
-cd <project-root>
-.venv\Scripts\activate
-py app.py
-```
-
-Open a browser:
-
-```text
-http://127.0.0.1:7860
-```
-
-- Use **Stop current job** to cancel a long phase (already-written files are kept; there is no undo).  
-- **Dashboard** shows counts and readiness of key artifacts.
-
----
-
-## 6. Typical end-to-end workflow
-
-1. **Deduplication** analysis → open Excel in DEDUPS_DIR → mark User_Confirmed_Delete → dry-run → uncheck dry-run to delete.
-2. **Ingestion** extracts text and images for further processing
-3. **Classification** (pick MiniLM or Qwen3). Close the result workbook in Excel first.
-4. **Review / override** for rows the model got wrong.
-5. **Placeholders** create the metadata labels and space within the document properties
-6. **Metadata injector** with the same radio.
-
-- Disposition Authorization: `2021/005`  
-- Technical Environment: `Microsoft's Distributed File System (DFS)`
-
----
-
-## 7. Updating the application
-
-1. Stop the app (Ctrl+C).  
-2. Download a new ZIP (or `git pull`).  
-3. Replace code files; **preserve** your edited `project_config.py` (or re-apply paths).  
-4. Activate env → `pip install -r requirements.txt` if dependencies changed.  
-5. Start again.
-
-Data folders and model directories should live **outside** the code tree when possible.
-
----
-
-## 8. Security notes (local deploy)
-
-- Prefer **localhost** binding; do not use public Gradio share links for sensitive corpora.  
-- Keep **model directories** writable only by trusted admins; load only models you downloaded.  
-- Treat external PDFs/images as untrusted input (parser DoS possible); keep packages updated via `requirements.txt`.  
-- Native Office injection is **best-effort**; JSON side-cars are the reliable metadata record.
-
----
-
-## 9. Troubleshooting
-
-| Symptom | Check |
-|---------|--------|
-| App won’t start | Correct venv/conda; `pip install -r requirements.txt` |
-| Import / module errors | Run from project root; `PYTHONPATH` / working directory |
-| Empty classification hierarchy | FCP CSV path; embedding model path; re-run classification |
-| No `_images` for PDFs | Document may have no embedded rasters; standalone PNG/JPG are copied under `_images` when configured |
-| Word inject fails | Office COM policy; side-car JSON still written |
-| Hugging Face network calls | Models path wrong; set offline env vars; verify local folders |
-
----
-
-## Quick start (checklist)
-
-- [ ] ZIP or clone into a user-writable folder  
-- [ ] Create venv/conda env; install `requirements.txt`  
-- [ ] Download MiniLM + Qwen2-VL into local model folders  
-- [ ] Edit `project_config.py` paths once  
-- [ ] `python app.py` → http://127.0.0.1:7860  
-- [ ] Smoke-test Ingestion → Classification on a small folder  
-```
-
-## Configure paths (required)
-
-Before the first run, open **project_config.py** and set every absolute
-path for this machine (source documents, extracted texts, results and models.
-Save the file and restart the app after any change.
-
-# =============================================================================
-# PATH CONFIGURATION (REQUIRED ON EACH MACHINE)
-# =============================================================================
-# Edit the absolute paths below to match this computer or DFS share.
-# There is no single data root — each folder can live on a different drive.
-# After changing any path, SAVE this file and RESTART the Gradio app
-# (stop with Ctrl+C, then: python app.py).
-# Do not rely on environment variables for normal use; this file is the
-# single place to configure paths.
-# =============================================================================
-
-Paths are set only in project_config.py. Change paths there, save, then restart the application.
-
-```
-
-## User interface
-
-### Dashboard
-![Dashboard status](docs/images/1_Dashboard.png)
-
-### Configuration of Absolute Paths
-![Configuration](docs/images/2_Configuration.png)
-
-### Deduplication
-![Deduplication](docs/images/3_DeDuplication.png)
-
-### Deduplication Dry-Run and Deletion
-![Deduplication](docs/images/3_DeDuplication2.png)
-
-### Ingestion of Raw Text from Documents
-![Ingestion](docs/images/4_Ingestion.png)
-
-### Classification
-![Classification](docs/images/5_Classification.png)
-
-### Review and Override
-![Classification](docs/images/5_Classification2.png)
-
-### Metadata Placeholder and Injection
-![Metadata](docs/images/6_Metadata.png)
-
-### Metadata Placeholder and Injection
-![Metadata](docs/images/6_Metadata2.png)
-
-```
+Le mot-symbole « Canada » et les éléments graphiques connexes liés à cette distribution sont protégés en vertu des lois portant sur les marques de commerce et le droit d'auteur. Aucune autorisation n'est accordée pour leur utilisation à l'extérieur des paramètres du programme de coordination de l'image de marque du gouvernement du Canada. Pour obtenir davantage de renseignements à ce sujet, veuillez consulter les [Exigences pour l'image de marque](https://www.canada.ca/fr/secretariat-conseil-tresor/sujets/communications-gouvernementales/exigences-image-marque.html).
