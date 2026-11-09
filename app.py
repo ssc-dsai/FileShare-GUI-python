@@ -219,9 +219,6 @@ def ui_stop() -> str:
     ok, log, _ = run_stop()
     return log
 
-def _hitl_key(choice: str) -> str:
-    return "qwen3" if "qwen" in (choice or "").lower() else "minilm"
-
 
 def ui_hitl_load(embedder_choice: str):
     key = _hitl_key(embedder_choice)
