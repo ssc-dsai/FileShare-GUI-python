@@ -286,9 +286,9 @@ def get_recommended_action(row):
 
 
 df["Recommended_Action"] = df.apply(get_recommended_action, axis=1)
-df["User_Confirmed_Delete"] = df.apply(
-    lambda row: "Yes" if row["Recommended_Action"] == "Delete" else "", axis=1
-)
+# Leave User_Confirmed_Delete blank; the reviewer must explicitly set it to
+# "Yes" for each row they approve for deletion.
+df["User_Confirmed_Delete"] = ""
 
 df["Exact_Duplicate"] = df.duplicated(subset=["Hash_Value"], keep=False)
 # Any non-master member of a cluster is a near-duplicate, regardless of its
