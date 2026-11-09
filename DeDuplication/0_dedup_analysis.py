@@ -39,6 +39,11 @@ try:
 except ImportError:
     Document = None
 
+try:
+    from Ingestion.office_legacy import extract_legacy_office
+except ImportError:
+    extract_legacy_office = None
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -115,11 +120,14 @@ def extract_text_from_file(file_path: Path) -> str:
             text = "\n".join(page.get_text("text") for page in doc)
             doc.close()
             return text
-        elif suffix in (".docx", ".doc") and Document:
-            if suffix == ".doc":
-                return file_path.name  # old binary .doc not supported
+        elif suffix == ".docx" and Document:
             doc = Document(file_path)
             return "\n".join(p.text for p in doc.paragraphs)
+        elif suffix == ".doc" and extract_legacy_office:
+            return extract_legacy_office(file_path) or file_path.name
+        elif suffix == ".doc":
+            logger.warning(f"Legacy .doc not supported (pywin32 unavailable): {file_path.name}")
+            return file_path.name
         else:
             return file_path.name
     except Exception as e:

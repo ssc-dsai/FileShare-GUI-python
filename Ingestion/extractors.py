@@ -31,6 +31,11 @@ try:
 except ImportError:
     Presentation = None
 
+try:
+    from Ingestion.office_legacy import extract_legacy_office
+except ImportError:
+    extract_legacy_office = None
+
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff", ".bmp", ".webp"}
 
 
@@ -92,10 +97,19 @@ def extract_text_from_file(
 
         if ext == ".pdf":
             text, imgs = _extract_pdf(path, et_dir)
-        elif ext in {".doc", ".docx"}:
+        elif ext == ".docx":
             text, imgs = _extract_docx(path, et_dir)
-        elif ext in {".ppt", ".pptx"}:
+        elif ext == ".pptx":
             text, imgs = _extract_pptx(path, et_dir)
+        elif ext in {".doc", ".ppt"} and extract_legacy_office:
+            text = extract_legacy_office(path)
+            imgs = []
+            if not text:
+                logger.warning(f"{path.name}: legacy Office COM extraction returned no text")
+        elif ext in {".doc", ".ppt"}:
+            logger.warning(f"{path.name}: legacy .{ext} not supported (pywin32 unavailable)")
+            text = ""
+            imgs = []
         elif ext == ".txt":
             text = path.read_text(encoding="utf-8", errors="replace").strip()
             imgs = []
