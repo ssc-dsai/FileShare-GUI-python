@@ -164,6 +164,7 @@ logger.info(f"Found {len(files)} files to analyze")
 records = []
 embeddings = []
 file_paths = []
+texts = []
 
 for file_path in files:
     try:
@@ -191,6 +192,7 @@ for file_path in files:
         )
         embeddings.append(emb)
         file_paths.append(file_path)
+        texts.append(text)
     except Exception as e:
         logger.warning(f"Failed to process {file_path.name}: {e}")
 
@@ -206,6 +208,10 @@ logger.info("Computing similarity matrix...")
 sim_matrix = cosine_similarity(embeddings)
 
 # -------------------- Clustering --------------------
+# Use BFS so that a file similar to ANY cluster member is pulled into the
+# cluster (transitive closure), not just the seed.
+from collections import deque
+
 visited = set()
 cluster_id = 0
 df["Cluster_ID"] = "Unique"
@@ -214,17 +220,23 @@ df["Similarity_Score"] = 1.0
 df["Similarity_Found"] = ""
 df["Discrepancy"] = ""
 
-for i in range(len(df)):
+n = len(df)
+
+for i in range(n):
     if i in visited:
         continue
 
+    # BFS from seed i
     cluster = [i]
     visited.add(i)
-
-    for j in range(i + 1, len(df)):
-        if sim_matrix[i, j] >= SIMILARITY_THRESHOLD and j not in visited:
-            cluster.append(j)
-            visited.add(j)
+    queue = deque([i])
+    while queue:
+        cur = queue.popleft()
+        for j in range(n):
+            if j not in visited and sim_matrix[cur, j] >= SIMILARITY_THRESHOLD:
+                visited.add(j)
+                cluster.append(j)
+                queue.append(j)
 
     if len(cluster) > 1:
         cluster_id += 1
@@ -279,14 +291,14 @@ df["User_Confirmed_Delete"] = df.apply(
 )
 
 df["Exact_Duplicate"] = df.duplicated(subset=["Hash_Value"], keep=False)
-df["Near_Duplicate"] = (df["Similarity_Score"] >= SIMILARITY_THRESHOLD) & (
-    df["Cluster_ID"] != "Unique"
-)
+# Any non-master member of a cluster is a near-duplicate, regardless of its
+# individual similarity score to the master (BFS may pull in files that are
+# similar to a cluster member but not directly to the master).
+df["Near_Duplicate"] = (df["Cluster_ID"] != "Unique") & (~df["Is_Master"])
 df["Hash_Type"] = "SHA-256"
 
-df["downstream_hyperlinks"] = df["original_path"].apply(
-    lambda p: extract_hyperlinks(extract_text_from_file(Path(p)))
-)
+# Use text already extracted in the main loop to avoid re-opening every file.
+df["downstream_hyperlinks"] = [extract_hyperlinks(t) for t in texts]
 
 # Final column order
 cols = [
