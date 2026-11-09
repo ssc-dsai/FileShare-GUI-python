@@ -93,18 +93,38 @@ def enrich_language(text: str) -> dict:
 # PII (lightweight)
 # ---------------------------------------------------------------------------
 
+# Matches a PRI/CIDP label immediately followed by a 9-digit number.
 _PRI_RE = re.compile(
     r"(?i)(Personal Record Identifier|PRI|CIDP|Code d'identification de dossier personnel)"
     r"[ :.]?\s*(\d{3}[- .]?\d{3}[- .]?\d{3})"
 )
-_SIN_RE = re.compile(r"\b\d{3}[ -]?\d{3}[ -]?\d{3}\b")
+# Matches a SIN/PRI label with a 9-digit number anywhere within 40 chars.
+# This avoids flagging arbitrary 9-digit numbers (phone, invoice, etc.)
+# that are not associated with a personal-identifier keyword.
+_SIN_LABEL_RE = re.compile(
+    r"(?i)(\b(?:SIN|Social Insurance Number|num[eé]ro d'assurance sociale|assurance sociale)\b)"
+    r".{0,40}?(\d{3}[ -]\d{3}[ -]\d{3})"
+)
+# A 9-digit number with separators, only used as a fallback when the
+# text also contains a personal-identifier keyword nearby.
+_SEP_NUMBER_RE = re.compile(r"\b\d{3}[ -]\d{3}[ -]\d{3}\b")
 
 
 def enrich_pii(text: str) -> dict:
     if not text:
         return {"personal_information": "No"}
-    if _PRI_RE.search(text) or _SIN_RE.search(text[:5000]):
+    if _PRI_RE.search(text) or _SIN_LABEL_RE.search(text):
         return {"personal_information": "Yes"}
+    # Fallback: a separated 9-digit number that appears near a PII keyword
+    # within a 60-char window. This catches formats like "PRI 028 200 085"
+    # without flagging phone numbers or invoice numbers.
+    sample = text[:8000]
+    for m in _SEP_NUMBER_RE.finditer(sample):
+        start = max(0, m.start() - 60)
+        end = min(len(sample), m.end() + 60)
+        window = sample[start:end]
+        if re.search(r"(?i)\b(PRI|CIDP|SIN|Personal Record|assurance sociale)\b", window):
+            return {"personal_information": "Yes"}
     return {"personal_information": "No"}
 
 
