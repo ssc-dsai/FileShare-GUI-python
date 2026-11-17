@@ -25,8 +25,8 @@ Reports and clones stay separate per model (`classification_results_minilm.xlsx`
 
 1. Download the ZIP from the repository, or `git clone` it, into a user-writable folder. Do not install under `Program Files`.
 2. Create a virtual environment and install dependencies: `python -m venv .venv`, activate it, then `python -m pip install -r requirements.txt`. On a managed PC with no Conda, use the installed `py` and `py -m pip`.
-3. Download the embedders and the vision model once (network required) into the folders named in `project_config.py`. Runtime is offline after that.
-4. Edit absolute paths only in `project_config.py` (source documents, extracts, results, models, resources). Save and restart after any change.
+3. Copy `.env.example` to `.env`, then set `DOCS_ROOT` (and optional path overrides if needed).
+4. Download the embedders and the vision model once (network required) into the folders named in `project_config.py`. Runtime is offline after that.
 5. From the project folder, run `py app.py` and open `http://127.0.0.1:7860`.
 
 Stop cancels the current job. Files already written are kept. There is no undo.
@@ -80,8 +80,8 @@ Les rapports et les copies restent séparés par modèle (`classification_result
 
 1. Télécharger le ZIP du dépôt, ou faire un `git clone`, dans un dossier accessible en écriture. Ne pas installer sous `Program Files`.
 2. Créer un environnement virtuel et installer les dépendances : `python -m venv .venv`, l’activer, puis `python -m pip install -r requirements.txt`. Sur un poste géré sans Conda, utiliser le `py` déjà installé et `py -m pip`.
-3. Télécharger une fois les modèles d’intégration et le modèle de vision (réseau requis) dans les dossiers indiqués dans `project_config.py`. L’exécution est ensuite hors ligne.
-4. Modifier les chemins absolus uniquement dans `project_config.py` (documents sources, extraits, résultats, modèles, ressources). Enregistrer et redémarrer après tout changement.
+3. Copier `.env.example` vers `.env`, puis définir `DOCS_ROOT` (et les remplacements de chemins au besoin).
+4. Télécharger une fois les modèles d’intégration et le modèle de vision (réseau requis) dans les dossiers indiqués dans `project_config.py`. L’exécution est ensuite hors ligne.
 5. Depuis le dossier du projet, lancer `py app.py` et ouvrir `http://127.0.0.1:7860`.
 
 Le bouton d’arrêt annule le travail en cours. Les fichiers déjà écrits sont conservés. Il n’y a pas d’annulation.

@@ -10,7 +10,7 @@ import pandas as pd
 
 from project_config import CLASSIFICATION_RESULTS_DIR, HIERARCHY_CSV
 
-from Classification.archival_rules import archival_value_for
+from classification.archival_rules import archival_value_for
 
 UNKNOWN = "Unknown"
 
