@@ -20,9 +20,8 @@ records-management tool for the Government of Canada.
    python -m pip install -r requirements.txt
    ```
 
-3. Edit the absolute paths in `project_config.py` to point at your
-   local source documents, extracted-texts folder, results folder,
-   model folder, and resources folder.
+3. Copy `.env.example` to `.env` and set `DOCS_ROOT` (plus any
+   optional path overrides you need).
 
 4. Run the application:
 

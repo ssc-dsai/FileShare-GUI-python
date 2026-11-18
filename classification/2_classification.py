@@ -29,10 +29,10 @@ from project_config import (
     resolve_embedder,
 )
 
-from Classification.config_classification import COLUMNS_ORDER
-from Classification.hierarchy_loader import load_or_build_hierarchy_index
-from Classification.classification_core import classify_document
-from Classification.vision_helper import build_vision_augmented_text
+from classification.config_classification import COLUMNS_ORDER
+from classification.hierarchy_loader import load_or_build_hierarchy_index
+from classification.classification_core import classify_document
+from classification.vision_helper import build_vision_augmented_text
 
 LOG_DIR = CLASSIFICATION_RESULTS_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -161,7 +161,7 @@ def run_classification(embedder_key: str = "minilm") -> None:
                 chunk_chars=cfg["chunk_chars"],
             )
 
-            from Classification.archival_rules import archival_value_for
+            from classification.archival_rules import archival_value_for
             row["Archival_value"] = archival_value_for(
                 row.get("Function_EN", ""),
                 row.get("Sub-Function_EN", ""),

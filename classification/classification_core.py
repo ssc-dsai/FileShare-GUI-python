@@ -14,9 +14,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-from Classification.config_classification import COLUMNS_ORDER, FUNCTION_MIN_SCORE, REVIEW_BELOW
-from Classification.semantic_matcher import semantic_match
-from Classification.enrichers import (
+from classification.config_classification import COLUMNS_ORDER, FUNCTION_MIN_SCORE, REVIEW_BELOW
+from classification.semantic_matcher import semantic_match
+from classification.enrichers import (
     apply_regex_overrides,
     enrich_document_type,
     enrich_language,

@@ -63,7 +63,7 @@ from project_config import (
     PLACEHOLDERS_QWEN3_4B_DIR,
 )
 
-from Classification.hitl_review import (
+from classification.hitl_review import (
     apply_override,
     current_assignment,
     document_choices,
