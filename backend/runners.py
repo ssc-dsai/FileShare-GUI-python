@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from backend.job_control import is_running, set_current, stop as job_stop
+from backend.job_control import is_running, set_current, stop as job_stop, was_stop_requested
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -74,19 +74,16 @@ def _run_script_subprocess(
         log = "".join(chunks) + f"\n===== EXCEPTION =====\n{type(e).__name__}: {e}\n"
         return False, log
 
+    stopped_by_user = was_stop_requested()
     set_current(None, "")
     log = "".join(chunks)
     code = proc.returncode if proc.returncode is not None else -1
 
-    # Negative return codes often mean killed by signal (Stop on Unix);
-    # on Windows, terminate typically yields a non-zero code.
     if code != 0:
-        if "STOPPED" not in log.upper():
-            # Heuristic: user stop mid-run
-            if code in (-15, -9, 1, 15, 9) or code < 0:
-                log += "\n===== STOPPED OR NON-ZERO EXIT =====\n"
-            else:
-                log += f"\n===== EXIT CODE {code} =====\n"
+        if stopped_by_user:
+            log += f"\n===== STOPPED BY USER (exit code {code}) =====\n"
+        else:
+            log += f"\n===== EXIT CODE {code} (crashed) =====\n"
         return False, log
 
     return True, log

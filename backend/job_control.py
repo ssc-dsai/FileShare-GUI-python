@@ -10,13 +10,15 @@ from typing import Optional
 _lock = threading.Lock()
 _current: Optional[subprocess.Popen] = None
 _label: str = ""
+_stop_requested: bool = False
 
 
 def set_current(proc: subprocess.Popen | None, label: str = "") -> None:
-    global _current, _label
+    global _current, _label, _stop_requested
     with _lock:
         _current = proc
         _label = label or ""
+        _stop_requested = False
 
 
 def get_label() -> str:
@@ -31,18 +33,27 @@ def is_running() -> bool:
         return _current.poll() is None
 
 
+def was_stop_requested() -> bool:
+    """Return True if the most recent stop was a user-initiated Stop."""
+    with _lock:
+        return _stop_requested
+
+
 def stop(timeout: float = 5.0) -> str:
     """
     Kill the active job. Does NOT undo files already written.
     Returns a short status message for the UI.
     """
-    global _current, _label
+    global _current, _label, _stop_requested
     with _lock:
         proc = _current
         label = _label or "job"
 
     if proc is None or proc.poll() is not None:
         return "No job is currently running."
+
+    with _lock:
+        _stop_requested = True
 
     try:
         proc.terminate()

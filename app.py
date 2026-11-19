@@ -63,7 +63,7 @@ from project_config import (
     PLACEHOLDERS_QWEN3_4B_DIR,
 )
 
-from Classification.hitl_review import (
+from classification.hitl_review import (
     apply_override,
     current_assignment,
     document_choices,
@@ -218,9 +218,6 @@ def ui_run_injector(embedder_choice: str) -> str:
 def ui_stop() -> str:
     ok, log, _ = run_stop()
     return log
-
-def _hitl_key(choice: str) -> str:
-    return "qwen3" if "qwen" in (choice or "").lower() else "minilm"
 
 
 def ui_hitl_load(embedder_choice: str):

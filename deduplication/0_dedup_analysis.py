@@ -39,6 +39,11 @@ try:
 except ImportError:
     Document = None
 
+try:
+    from Ingestion.office_legacy import extract_legacy_office
+except ImportError:
+    extract_legacy_office = None
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -115,11 +120,14 @@ def extract_text_from_file(file_path: Path) -> str:
             text = "\n".join(page.get_text("text") for page in doc)
             doc.close()
             return text
-        elif suffix in (".docx", ".doc") and Document:
-            if suffix == ".doc":
-                return file_path.name  # old binary .doc not supported
+        elif suffix == ".docx" and Document:
             doc = Document(file_path)
             return "\n".join(p.text for p in doc.paragraphs)
+        elif suffix == ".doc" and extract_legacy_office:
+            return extract_legacy_office(file_path) or file_path.name
+        elif suffix == ".doc":
+            logger.warning(f"Legacy .doc not supported (pywin32 unavailable): {file_path.name}")
+            return file_path.name
         else:
             return file_path.name
     except Exception as e:
@@ -164,6 +172,7 @@ logger.info(f"Found {len(files)} files to analyze")
 records = []
 embeddings = []
 file_paths = []
+texts = []
 
 for file_path in files:
     try:
@@ -191,6 +200,7 @@ for file_path in files:
         )
         embeddings.append(emb)
         file_paths.append(file_path)
+        texts.append(text)
     except Exception as e:
         logger.warning(f"Failed to process {file_path.name}: {e}")
 
@@ -206,6 +216,10 @@ logger.info("Computing similarity matrix...")
 sim_matrix = cosine_similarity(embeddings)
 
 # -------------------- Clustering --------------------
+# Use BFS so that a file similar to ANY cluster member is pulled into the
+# cluster (transitive closure), not just the seed.
+from collections import deque
+
 visited = set()
 cluster_id = 0
 df["Cluster_ID"] = "Unique"
@@ -214,17 +228,23 @@ df["Similarity_Score"] = 1.0
 df["Similarity_Found"] = ""
 df["Discrepancy"] = ""
 
-for i in range(len(df)):
+n = len(df)
+
+for i in range(n):
     if i in visited:
         continue
 
+    # BFS from seed i
     cluster = [i]
     visited.add(i)
-
-    for j in range(i + 1, len(df)):
-        if sim_matrix[i, j] >= SIMILARITY_THRESHOLD and j not in visited:
-            cluster.append(j)
-            visited.add(j)
+    queue = deque([i])
+    while queue:
+        cur = queue.popleft()
+        for j in range(n):
+            if j not in visited and sim_matrix[cur, j] >= SIMILARITY_THRESHOLD:
+                visited.add(j)
+                cluster.append(j)
+                queue.append(j)
 
     if len(cluster) > 1:
         cluster_id += 1
@@ -274,19 +294,19 @@ def get_recommended_action(row):
 
 
 df["Recommended_Action"] = df.apply(get_recommended_action, axis=1)
-df["User_Confirmed_Delete"] = df.apply(
-    lambda row: "Yes" if row["Recommended_Action"] == "Delete" else "", axis=1
-)
+# Leave User_Confirmed_Delete blank; the reviewer must explicitly set it to
+# "Yes" for each row they approve for deletion.
+df["User_Confirmed_Delete"] = ""
 
 df["Exact_Duplicate"] = df.duplicated(subset=["Hash_Value"], keep=False)
-df["Near_Duplicate"] = (df["Similarity_Score"] >= SIMILARITY_THRESHOLD) & (
-    df["Cluster_ID"] != "Unique"
-)
+# Any non-master member of a cluster is a near-duplicate, regardless of its
+# individual similarity score to the master (BFS may pull in files that are
+# similar to a cluster member but not directly to the master).
+df["Near_Duplicate"] = (df["Cluster_ID"] != "Unique") & (~df["Is_Master"])
 df["Hash_Type"] = "SHA-256"
 
-df["downstream_hyperlinks"] = df["original_path"].apply(
-    lambda p: extract_hyperlinks(extract_text_from_file(Path(p)))
-)
+# Use text already extracted in the main loop to avoid re-opening every file.
+df["downstream_hyperlinks"] = [extract_hyperlinks(t) for t in texts]
 
 # Final column order
 cols = [

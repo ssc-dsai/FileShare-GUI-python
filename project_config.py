@@ -1,40 +1,34 @@
 # project_config.py
 """
 CENTRALIZED PROJECT CONFIGURATION - SINGLE SOURCE OF TRUTH
-Edit the absolute paths in this file for each machine. Save, then restart the app.
+Set variables in a local .env file (or OS environment). Save, then restart the app.
 """
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+
+def _path_from_env(name: str, fallback: Path) -> Path:
+    return Path(os.getenv(name, str(fallback))).resolve()
+
+
+load_dotenv(dotenv_path=Path(__file__).parent.resolve() / ".env", override=False)
+DOCS_ROOT = _path_from_env("DOCS_ROOT", Path(r"C:\Documents"))
 
 # ──────────────────────────────────────────────────────────────────
 # INDEPENDENT ABSOLUTE PATHS
 # ──────────────────────────────────────────────────────────────────
 
-SOURCE_DOCS_DIR = Path(os.getenv(
-    "SOURCE_DOCS",
-    r"C:\JAY_DOCS\Synthetic_Docs"
-)).resolve()
+SOURCE_DOCS_DIR = _path_from_env("SOURCE_DOCS", DOCS_ROOT / "Synthetic_Docs")
 
-EXTRACTED_TEXTS_DIR = Path(os.getenv(
-    "EXTRACTED_TEXTS",
-    r"C:\JAY_DOCS\extracted_texts"
-)).resolve()
+EXTRACTED_TEXTS_DIR = _path_from_env("EXTRACTED_TEXTS", DOCS_ROOT / "extracted_texts")
 
-CLASSIFICATION_RESULTS_DIR = Path(os.getenv(
-    "CLASSIFICATION_RESULTS",
-    r"C:\JAY_DOCS\classification_results"
-)).resolve()
+CLASSIFICATION_RESULTS_DIR = _path_from_env("CLASSIFICATION_RESULTS", DOCS_ROOT / "classification_results")
 
-DEDUPS_DIR = Path(os.getenv(
-    "DEDUPS",
-    r"C:\JAY_DOCS\Dedups"
-)).resolve()
+DEDUPS_DIR = _path_from_env("DEDUPS", DOCS_ROOT / "Dedups")
 
-INJECTED_METADATA_DIR = Path(os.getenv(
-    "INJECTED_METADATA",
-    r"C:\JAY_DOCS\Injected_Metadata"
-)).resolve()
+INJECTED_METADATA_DIR = _path_from_env("INJECTED_METADATA", DOCS_ROOT / "injected_metadata")
 
 # Per-model output trees (placeholders + clones)
 INJECTED_MINILM_DIR = INJECTED_METADATA_DIR / "minilm"
@@ -65,38 +59,35 @@ def metadata_dirs_for(embedder_key: str) -> dict:
 # ──────────────────────────────────────────────────────────────────
 # LOCAL MODELS (fully offline) — load ONLY the selected embedder
 # ──────────────────────────────────────────────────────────────────
-MODELS_DIR = Path(os.getenv(
-    "MODELS_DIR",
-    r"C:\JAY_DOCS\models"
-)).resolve()
+MODELS_DIR = _path_from_env("MODELS_DIR", DOCS_ROOT / "models")
 
 
 
 
-EMBEDDING_MODEL_MINILM_PATH = Path(os.getenv(
+EMBEDDING_MODEL_MINILM_PATH = _path_from_env(
     "EMBEDDING_MODEL",
-    str(MODELS_DIR / "paraphrase-multilingual-MiniLM-L12-v2")
-)).resolve()
+    MODELS_DIR / "paraphrase-multilingual-MiniLM-L12-v2",
+)
 
 EMBEDDING_MODEL_PATH = EMBEDDING_MODEL_MINILM_PATH
 
-EMBEDDING_MODEL_QWEN_PATH = Path(os.getenv(
+EMBEDDING_MODEL_QWEN_PATH = _path_from_env(
     "EMBEDDING_MODEL_QWEN",
-    str(MODELS_DIR / "Qwen3-Embedding-0.6B")
-)).resolve()
+    MODELS_DIR / "Qwen3-Embedding-0.6B",
+)
 
-EMBEDDING_MODEL_QWEN3_4B_PATH = Path(os.getenv(
+EMBEDDING_MODEL_QWEN3_4B_PATH = _path_from_env(
     "EMBEDDING_MODEL_QWEN3_4B",
-    str(MODELS_DIR / "Qwen3-Embedding-4B"),
-)).resolve()
+    MODELS_DIR / "Qwen3-Embedding-4B",
+)
 
 INJECTED_QWEN3_4B_DIR = INJECTED_METADATA_DIR / "qwen3_4b"
 PLACEHOLDERS_QWEN3_4B_DIR = INJECTED_QWEN3_4B_DIR / "placeholders"
 
-VISION_MODEL_PATH = Path(os.getenv(
+VISION_MODEL_PATH = _path_from_env(
     "VISION_MODEL",
-    str(MODELS_DIR / "Qwen2-VL-2B-Instruct")
-)).resolve()
+    MODELS_DIR / "Qwen2-VL-2B-Instruct",
+)
 
 CLASSIFICATION_MODEL_PATH = VISION_MODEL_PATH
 

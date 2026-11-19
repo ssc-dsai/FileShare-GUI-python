@@ -3,6 +3,7 @@
 venv/
 env/
 *.conda/
+.env
 
 # Python
 __pycache__/

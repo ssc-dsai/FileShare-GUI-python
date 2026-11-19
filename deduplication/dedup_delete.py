@@ -80,10 +80,11 @@ def main():
 
     logger.info(f"Loaded {len(df)} rows from deduplication Excel")
 
-    # Backup folder
+    # Backup folder (only created when actually deleting, not on dry-run)
     backup_dir = DEDUPS_DIR / f"_dedup_backup_{datetime.now().strftime('%Y%m%d_%H%M')}"
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Backup folder created: {backup_dir}")
+    if not args.dry_run:
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Backup folder created: {backup_dir}")
 
     deleted_count = 0
     skipped_count = 0
@@ -109,26 +110,24 @@ def main():
             continue
 
         confirmed = str(row.get("User_Confirmed_Delete", "")).strip().lower() == "yes"
-        recommended_delete = (
-            str(row.get("Recommended_Action", "")).strip() == "Delete"
-        )
         is_master = bool(row.get("Is_Master", False))
 
-        # Delete only when user confirmed OR it is a clear non-master "Delete"
-        if confirmed or (recommended_delete and not is_master):
+        # Only delete when the user has explicitly confirmed AND the row
+        # is not a master.  The auto-recommendation alone is not sufficient.
+        if confirmed and not is_master:
             if file_path.exists():
                 try:
-                    # Always backup first
-                    try:
-                        relative = file_path.relative_to(SOURCE_DIR)
-                    except ValueError:
-                        relative = Path(file_path.name)
-
-                    backup_path = backup_dir / relative
-                    backup_path.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(file_path, backup_path)
-
                     if not args.dry_run:
+                        # Backup before real deletion only
+                        try:
+                            relative = file_path.relative_to(SOURCE_DIR)
+                        except ValueError:
+                            relative = Path(file_path.name)
+
+                        backup_path = backup_dir / relative
+                        backup_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(file_path, backup_path)
+
                         file_path.unlink()
                         logger.info(f"DELETED: {file_path}")
                     else:
@@ -141,7 +140,7 @@ def main():
             else:
                 logger.warning(f"File not found (already deleted?): {file_path}")
         else:
-            logger.debug(f"Skipped (not marked for deletion): {filename}")
+            logger.debug(f"Skipped (not confirmed or is master): {filename}")
 
     logger.info(
         f"Deletion process finished | "
