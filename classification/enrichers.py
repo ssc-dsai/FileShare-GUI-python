@@ -98,16 +98,17 @@ _PRI_RE = re.compile(
     r"(?i)(Personal Record Identifier|PRI|CIDP|Code d'identification de dossier personnel)"
     r"[ :.]?\s*(\d{3}[- .]?\d{3}[- .]?\d{3})"
 )
-# Matches a SIN/PRI label with a 9-digit number anywhere within 40 chars.
-# This avoids flagging arbitrary 9-digit numbers (phone, invoice, etc.)
-# that are not associated with a personal-identifier keyword.
+# Matches a SIN/PRI label with a 9-digit number (with or without
+# separators) anywhere within 40 chars.  This avoids flagging arbitrary
+# 9-digit numbers (phone, invoice, etc.) that are not associated with a
+# personal-identifier keyword.
 _SIN_LABEL_RE = re.compile(
     r"(?i)(\b(?:SIN|Social Insurance Number|num[eé]ro d'assurance sociale|assurance sociale)\b)"
-    r".{0,40}?(\d{3}[ -]\d{3}[ -]\d{3})"
+    r".{0,40}?(\d{3}[- .]?\d{3}[- .]?\d{3})"
 )
-# A 9-digit number with separators, only used as a fallback when the
-# text also contains a personal-identifier keyword nearby.
-_SEP_NUMBER_RE = re.compile(r"\b\d{3}[ -]\d{3}[ -]\d{3}\b")
+# A 9-digit number (with or without separators), used as a fallback when
+# the text also contains a personal-identifier keyword nearby.
+_SEP_NUMBER_RE = re.compile(r"\b\d{3}[- .]?\d{3}[- .]?\d{3}\b")
 
 
 def enrich_pii(text: str) -> dict:
